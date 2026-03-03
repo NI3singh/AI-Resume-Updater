@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, FileText, Upload, Cpu, Download, CheckCircle, Zap } from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import { useAuth } from '@/context/AuthContext';
 
 const features = [
   { icon: FileText, title: 'Your Template, Your Rules', desc: 'Built around your exact LaTeX template. No generic defaults — it adapts to your structure.' },
@@ -20,6 +21,13 @@ const steps = [
 ];
 
 export default function HomePage() {
+  const { user, loading, signOut } = useAuth();
+
+  // Extract first name from email (e.g. "nitin" from "nitin@gmail.com")
+  const firstName = user?.email
+    ? user.email.split('@')[0].charAt(0).toUpperCase() + user.email.split('@')[0].slice(1)
+    : null;
+
   return (
     <div className="min-h-screen bg-ink-950 overflow-x-hidden">
       {/* Navbar */}
@@ -31,12 +39,44 @@ export default function HomePage() {
           <span className="font-display font-medium text-ivory text-sm tracking-wide">ResumeTeX</span>
         </div>
         <div className="flex items-center gap-6">
-          <Link href="/builder" className="text-xs font-medium text-ivory-muted hover:text-ivory transition-colors animated-underline">Builder</Link>
           <a href="https://latex.online" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-ivory-muted hover:text-ivory transition-colors animated-underline">LaTeX.online</a>
           <ThemeToggle />
-          <Link href="/builder" className="px-4 py-2 text-xs font-semibold bg-gold text-ink-950 rounded-lg hover:bg-gold-light transition-colors">
-            Start Building
-          </Link>
+          {loading ? (
+            // Skeleton while auth resolves
+            <div className="w-24 h-8 rounded-lg bg-ink-700 animate-pulse" />
+          ) : user ? (
+            // ── Logged-in state ──
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-ivory-muted font-mono">
+                Hey, <span className="text-ivory font-semibold">{firstName}</span> 👋
+              </span>
+              <Link
+                href="/builder"
+                className="px-4 py-2 text-xs font-semibold bg-gold text-ink-950 rounded-lg hover:bg-gold-light transition-colors"
+              >
+                Open Builder →
+              </Link>
+              <button
+                onClick={() => signOut()}
+                className="text-xs text-ivory-dim hover:text-ivory-muted transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            // ── Guest state ──
+            <div className="flex items-center gap-3">
+              <Link href="/login" className="text-xs font-medium text-ivory-muted hover:text-ivory transition-colors">
+                Log In
+              </Link>
+              <Link
+                href="/login"
+                className="px-4 py-2 text-xs font-semibold bg-gold text-ink-950 rounded-lg hover:bg-gold-light transition-colors"
+              >
+                Get Started
+              </Link>
+            </div>
+          )}
         </div>
       </nav>
 
@@ -88,27 +128,49 @@ export default function HomePage() {
             AI extracts everything. One click compiles to PDF.
           </motion.p>
 
-          {/* CTA */}
+          {/* CTA — changes based on auth state */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
             className="flex items-center justify-center gap-4"
           >
-            <Link
-              href="/builder"
-              className="inline-flex items-center gap-2 px-7 py-3.5 bg-gold text-ink-950 font-semibold text-sm rounded-xl hover:bg-gold-light transition-all duration-300 hover:shadow-lg hover:shadow-gold/20 hover:-translate-y-0.5"
-            >
-              Open Builder
-              <ArrowRight size={16} />
-            </Link>
-            <Link
-              href="/builder?mode=upload"
-              className="inline-flex items-center gap-2 px-7 py-3.5 border border-ink-600 text-ivory-muted text-sm rounded-xl hover:border-ivory/30 hover:text-ivory transition-all duration-300"
-            >
-              <Upload size={15} />
-              Upload Resume
-            </Link>
+            {user ? (
+              // Logged-in: go straight to builder
+              <>
+                <Link
+                  href="/builder"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 bg-gold text-ink-950 font-semibold text-sm rounded-xl hover:bg-gold-light transition-all duration-300 hover:shadow-lg hover:shadow-gold/20 hover:-translate-y-0.5"
+                >
+                  Open Builder
+                  <ArrowRight size={16} />
+                </Link>
+                <Link
+                  href="/builder?mode=upload"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 border border-ink-600 text-ivory-muted text-sm rounded-xl hover:border-ivory/30 hover:text-ivory transition-all duration-300"
+                >
+                  <Upload size={15} />
+                  Upload Resume
+                </Link>
+              </>
+            ) : (
+              // Guest: go to login
+              <>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 bg-gold text-ink-950 font-semibold text-sm rounded-xl hover:bg-gold-light transition-all duration-300 hover:shadow-lg hover:shadow-gold/20 hover:-translate-y-0.5"
+                >
+                  Get Started Free
+                  <ArrowRight size={16} />
+                </Link>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 border border-ink-600 text-ivory-muted text-sm rounded-xl hover:border-ivory/30 hover:text-ivory transition-all duration-300"
+                >
+                  Log In
+                </Link>
+              </>
+            )}
           </motion.div>
 
           {/* Preview mockup */}
@@ -124,7 +186,7 @@ export default function HomePage() {
                 <div className="w-3 h-3 rounded-full bg-crimson/60" />
                 <div className="w-3 h-3 rounded-full bg-gold/60" />
                 <div className="w-3 h-3 rounded-full bg-jade/60" />
-                <div className="ml-4 text-xs font-mono text-ivory-muted">resume.tex — ResumeTeX Builder</div>
+                <div className="ml-4 text-xs font-mono text-ivory-dim">resume.tex — ResumeTeX Builder</div>
               </div>
               {/* Split preview */}
               <div className="grid grid-cols-2 min-h-[280px]">
@@ -133,7 +195,7 @@ export default function HomePage() {
                   <div className="text-xs font-mono text-gold/70 mb-4">// Personal Info</div>
                   {['Full Name', 'Email Address', 'Phone Number', 'Location'].map((field, i) => (
                     <div key={field} className="mb-3">
-                      <div className="text-[10px] text-ivory-muted mb-1">{field}</div>
+                      <div className="text-[10px] text-ivory-dim mb-1">{field}</div>
                       <div className="h-7 rounded bg-ink-700 border border-ink-600 animate-pulse" style={{ animationDelay: `${i * 0.1}s`, width: `${70 + i * 5}%` }} />
                     </div>
                   ))}
@@ -235,7 +297,7 @@ San Francisco, CA
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-ink-800 px-8 py-6 flex items-center justify-between text-xs text-ivory-muted font-mono">
+      <footer className="border-t border-ink-800 px-8 py-6 flex items-center justify-between text-xs text-ivory-dim font-mono">
         <span>ResumeTeX — LaTeX Resume Builder</span>
         <span>Powered by LaTeX.online API + Claude AI</span>
       </footer>
