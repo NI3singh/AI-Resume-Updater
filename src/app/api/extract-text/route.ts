@@ -41,9 +41,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to extract text from file' }, { status: 500 });
   }
 }
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
