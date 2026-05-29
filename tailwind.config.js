@@ -30,7 +30,7 @@ module.exports = {
         crimson: '#E05A5A',
       },
       fontFamily: {
-        display: ['var(--font-playfair)', 'Georgia', 'serif'],
+        display: ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
         body: ['var(--font-dm-sans)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-jetbrains)', 'monospace'],
       },

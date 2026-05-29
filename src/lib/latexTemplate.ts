@@ -106,7 +106,7 @@ const buildProjects = (projects: ProjectEntry[], label: string): string => {
       ? ` \\hfill \\href{${p.githubUrl}}{\\textcolor{blue!70!black}{Github Link}}`
       : '';
     const liveLink = p.liveUrl
-      ? `\n\\textbar{\\href{${p.liveUrl}}{\\textcolor{blue!70!black}{Live Link}}}`
+      ? `\n\\textbar{} {\\href{${p.liveUrl}}{\\textcolor{blue!70!black}{Live Link}}}`
       : '';
     return `\\textbf{${esc(p.name)}}${techPart}${ghLink}${liveLink}\n${bulletList(p.bullets)}`;
   });

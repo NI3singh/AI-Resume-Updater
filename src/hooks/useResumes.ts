@@ -30,6 +30,12 @@ export function useResumes() {
   // ── Fetch all resumes for user ─────────────────────────────────────────────
   const fetchResumes = useCallback(async () => {
     if (!user) return;
+
+    // Ensure the Supabase session is valid before querying.
+    // On hard-refresh, the client-side session can lag behind the auth context.
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) return;
+
     const { data, error } = await supabase
       .from('resumes')
       .select('*')
@@ -47,7 +53,18 @@ export function useResumes() {
 
     (async () => {
       setLoading(true);
-      let data = await fetchResumes();
+
+      // Retry up to 3 times with exponential backoff to handle transient
+      // session-timing errors (empty {} error on hard refresh).
+      let data: ResumeRecord[] | undefined;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        data = await fetchResumes();
+        if (data) break;
+        if (attempt < 2) {
+          await new Promise(res => setTimeout(res, 800 * Math.pow(2, attempt)));
+        }
+      }
+
       if (!data) { setLoading(false); return; }
 
       // If user has no master resume yet, create one from defaultResumeData

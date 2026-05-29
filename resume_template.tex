@@ -1,0 +1,260 @@
+\documentclass[10pt, a4paper]{article}
+\usepackage[left=0.2in, right=0.2in, top=0.2in, bottom=0.2in]{geometry}
+\usepackage{times}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{tabularx}
+\usepackage{array}
+
+% Remove page numbering
+\pagestyle{empty}
+
+% Define colors for links
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    urlcolor=blue!70!black,
+}
+
+% Custom section formatting with consistent separators
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries}{}{0em}{}[\vspace{2pt}\hrule height 0.5pt\vspace{4pt}]
+\titlespacing{\section}{0pt}{0.5pt}{0pt}
+
+% Remove default indentation
+\setlength{\parindent}{0pt}
+
+% Custom itemize formatting for clean bullet points
+\setlist[itemize]{
+    leftmargin=15pt,
+    topsep=2pt,
+    itemsep=1pt,
+    parsep=1pt,
+    label=\textbullet
+}
+
+% Define a command for subsection headers (bold with colon)
+\newcommand{\skillitem}[1]{\textbf{#1} : }
+
+\begin{document}
+
+\begin{center}
+    {\huge\textbf{YOUR FULL NAME}}
+    
+    \vspace{2pt}
+    
+    (+XX) XXXXXXXXXX \textbar{} City, Country
+    
+    \vspace{2pt}
+    
+    \href{mailto:your.email@example.com}{your.email@example.com} \textbar{} \href{https://www.linkedin.com/in/yourprofile/}{www.linkedin.com/in/yourprofile/} \textbar{} \href{https://www.github.com/yourusername}{www.github.com/yourusername} \textbar{} \href{https://yourportfolio.com/}{Portfolio}
+\end{center}
+
+\vspace{-12pt}
+
+\section*{Education}
+
+\textbf{University Name} \textbar{} City, State \hfill \textbf{Agg. CGPA: X.XX}\\
+Degree Name \& Specialization \hfill Month YYYY - Month YYYY\\
+\textit{One-line academic highlight or achievement (e.g., perfect score in final semester, dean's list, etc.)}
+
+\vspace{5pt}
+
+\section*{Technical Skills}
+
+\skillitem{Languages}Language1 (proficiency), Language2 (proficiency), Language3 (proficiency)
+
+\skillitem{Tools \& Technology}Tool1, Tool2, Tool3, Tool4, Tool5, Tool6, Tool7, Tool8, Tool9, Tool10
+
+\skillitem{Frameworks}Framework1, Framework2, Framework3, Framework4, Framework5, Framework6, Framework7
+
+\skillitem{Technical Domains}Domain1, Domain2, Domain3, Domain4, Domain5, Domain6, Domain7, Domain8, Domain9
+
+\skillitem{Data Analysis \& Visualization}Skill1, Skill2, Skill3, Skill4, Skill5, Skill6, Skill7
+
+\skillitem{Databases \& Cloud Platforms}Platform1, Platform2, Platform3
+
+\vspace{5pt}
+
+\section*{Projects}
+
+\textbf{Project Title One} \textbar{} Tech Stack \& Key Technologies Used \hfill \href{https://github.com/yourusername/project-one}{\textcolor{blue!70!black}{Github Link}}
+\begin{itemize}
+    \item Brief description of what the project does and what problem it solves. Mention the core functionality and user-facing features.
+    \item Key technical decision or implementation detail — security, architecture, or design choice that adds value.
+    \item Quantifiable result or metric achieved (e.g., accuracy percentage, performance improvement, dataset size handled).
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Project Title Two} \textbar{} Tech Stack \& Key Technologies Used \hfill \href{https://github.com/yourusername/project-two}{\textcolor{blue!70!black}{Github Link}}
+\textbar{} {\href{https://your-live-demo-link.com/}{\textcolor{blue!70!black}{Live Link}}}
+\begin{itemize}
+    \item What data or problem was analyzed/solved, and what was the overall scope (e.g., rows of data, time range, domain).
+    \item Description of the data pipeline, feature engineering, or technical approach taken to tackle the problem.
+    \item Business insight or measurable impact uncovered (e.g., percentage improvement, cost reduction, performance uplift).
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Project Title Three} \textbar{} Tech Stack \& Key Technologies Used \hfill \href{https://github.com/yourusername/project-three}{\textcolor{blue!70!black}{Github Link}}
+\begin{itemize}
+    \item End-to-end pipeline or system description — what data/input it processes and what output it produces.
+    \item Technical methodology — tools, algorithms, or techniques used for data preparation and analysis.
+    \item Key insight discovered (e.g., a metric, a trend, a business-relevant finding with concrete numbers).
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Project Title Four} \textbar{} Tech Stack \& Key Technologies Used \hfill \href{https://github.com/yourusername/project-four}{\textcolor{blue!70!black}{Github Link}} 
+\textbar{} {\href{https://your-live-demo-link.com/}{\textcolor{blue!70!black}{Live Link}}}
+\begin{itemize}
+    \item What the system does at a high level — data sources, integrations, or APIs it connects to.
+    \item Technical optimization made to improve system performance, accuracy, or scalability.
+    \item Deployment approach and how it ensures reliability, groundedness, or real-time capability.
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Project Title Five} \textbar{} Tech Stack \& Key Technologies Used \hfill \href{https://github.com/yourusername/project-five}{\textcolor{blue!70!black}{Github Link}}
+\begin{itemize}
+    \item System architecture overview — what components were built and how they interact or compete.
+    \item Key algorithmic or prompting strategy implemented to achieve the project's goal.
+    \item Evaluation methodology or scoring logic designed, and what future use case it enables.
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Project Title Six} \textbar{} Tech Stack \& Key Technologies Used \hfill \href{https://github.com/yourusername/project-six}{\textcolor{blue!70!black}{Github Link}}
+\begin{itemize}
+    \item End-to-end pipeline description — model, tools, and overall workflow used to achieve the output.
+    \item Model fine-tuning or optimization technique applied (e.g., quantization, LoRA, pruning) and its benefit.
+    \item Additional module or feature integrated to extend functionality and improve user experience.
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Project Title Seven} \textbar{} Tech Stack \& Key Technologies Used \hfill \href{https://github.com/yourusername/project-seven}{\textcolor{blue!70!black}{Github Link}}
+\begin{itemize}
+    \item What problem the tool/extension solves, what it automates, and the workflow it improves for users.
+    \item Core algorithm or detection logic implemented, along with the trigger mechanism and output format.
+\end{itemize}
+
+\vspace{5pt}
+
+\section*{Experience}
+
+\textbf{Job Title} \textbar{} Company Name, City, State \hfill Month YYYY - Present
+\begin{itemize}
+    \item Led [project or initiative name], performing [type of analysis or work] on [scope of data/system] to achieve [goal].
+    \item Engineered [pipeline/system/tool] in [language/framework] to [what it does], creating [outcome or deliverable].
+    \item Deployed [product/model/solution] achieving [accuracy/performance metric or business impact].
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Job Title} \textbar{} Company Name, City, State \hfill Month YYYY - Month YYYY\\
+\textit{Project: Project Name | Tools/Technologies Used}
+\begin{itemize}
+    \item Engineered [type of pipeline or system] using [language/tool] to perform [ETL/analysis/processing] on [data volume].
+    \item Conducted [type of analysis] to identify [key patterns, factors, or insights] related to [domain].
+    \item Synthesized findings into [deliverable type] that [impact on team, product, or strategy].
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Job Title} \textbar{} Company Name, City, State \hfill Month YYYY - Month YYYY\\
+\textit{Project: Project Name | Tools/Technologies Used}
+\begin{itemize}
+    \item Analyzed [problem domain] to design and build [product/system] in [tool/platform], improving [metric or experience].
+    \item Investigated [N] [systems/applications/processes] to identify and resolve [N+] critical issues, demonstrating [skill].
+\end{itemize}
+
+\vspace{5pt}
+
+\section*{Extracurricular Activities}
+
+\textbf{Role/Position} \textbar{} Organization Name, Location \hfill Month YYYY - Month YYYY
+\begin{itemize}
+    \item Brief description of responsibilities, contributions, or what was built/organized during this activity.
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Role/Position} \textbar{} Organization Name, Location \hfill Month YYYY - Present
+\begin{itemize}
+    \item Brief description of testing, evaluation, or participation role and what products/programs were involved.
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Program/Competition Name} \textbar{} Institution Name, Mode \hfill Month YYYY - Month YYYY
+\begin{itemize}
+    \item Brief description of program outcome, ranking, or skill demonstrated.
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Program Name} \textbar{} Institution/Organization Name, Mode \hfill Month YYYY - Month YYYY
+\begin{itemize}
+    \item Brief description of modules completed or skills developed (e.g., leadership, communication, strategy).
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Role/Program Name} \textbar{} Organization Name, Mode \hfill Month YYYY - Month YYYY
+\begin{itemize}
+    \item Brief description of what you were selected for and what the program/fellowship involved.
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Role/Position} \textbar{} Organization Name, Mode \hfill Month YYYY - Month YYYY
+\begin{itemize}
+    \item Brief description of regional/community role, outreach efforts, or areas of contribution.
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Program Name} \textbar{} Organization Name, Mode \hfill Month YYYY - Month YYYY
+\begin{itemize}
+    \item Brief description of professional development completed (e.g., business analytics, strategic thinking).
+\end{itemize}
+
+\vspace{3pt}
+
+\textbf{Role/Program Name} \textbar{} Organization Name, Mode \hfill Month YYYY - Month YYYY
+\begin{itemize}
+    \item Brief description of ambassadorship, representation, or campus/community role.
+\end{itemize}
+
+\vspace{5pt}
+
+\section{Achievements}
+\begin{itemize}
+    \item Certified in [Topic/Skill] by [Institution], with demonstrated expertise in [specific area].
+    \item Achieved [position/rank] in [competition name] at [event/fest], showcasing [skills demonstrated].
+    \item Secured [position/rank] in [competition name] at [event/fest], demonstrating [skills demonstrated].
+\end{itemize}
+
+\vspace{5pt}
+
+\section*{Publications}
+
+\textbf{Full Title of Your Research Paper} \textbar{} Author One, Author Two
+\begin{itemize}
+    \item \textbf{Abstract:} One to two sentences summarizing the core finding, method, or contribution of the paper.
+    \item \href{https://arxiv.org/abs/XXXXXXXXXX}{\textcolor{blue!70!black}{arXiv Pre-print, YYYY}} % or replace with journal/conference link
+\end{itemize}
+
+\vspace{5pt}
+    
+\section*{Certifications}
+\begin{itemize}
+    \item Passed [Certification Name] Certification. \href{https://credential-link.com/your-credential-id}{\textcolor{blue!70!black}{[View Credential]}}
+\end{itemize}
+
+\vspace{3pt}
+
+\end{document}

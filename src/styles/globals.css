@@ -1,5 +1,5 @@
 /* src/styles/globals.css */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -12,7 +12,7 @@
 /* Dark Theme (default) */
 :root,
 [data-theme="dark"] {
-  --font-playfair: 'Playfair Display', Georgia, serif;
+  --font-jakarta: 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-dm-sans: 'DM Sans', system-ui, sans-serif;
   --font-jetbrains: 'JetBrains Mono', monospace;
 
@@ -99,15 +99,15 @@ button:not([class*="text-"]) svg {
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
   background: var(--ink-900);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--ink-600);
-  border-radius: 3px;
+  border-radius: 99px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--ink-500);
@@ -170,10 +170,9 @@ button:not([class*="text-"]) svg {
    COMPONENT UTILITIES
    ============================================= */
 
-/* Input base */
+/* Input base — works both as <input class="input-base"> and as a <div class="input-base"> flex row wrapper */
 .input-base {
-  @apply w-full rounded-lg px-3 py-2 text-sm
-    focus:outline-none focus:ring-1
+  @apply w-full rounded-xl px-3.5 py-2.5 text-sm
     transition-all duration-200 font-body;
   background: var(--ink-800);
   border: 1px solid var(--ink-600);
@@ -184,32 +183,116 @@ button:not([class*="text-"]) svg {
   color: var(--ivory-dim);
 }
 
-.input-base:focus {
-  border-color: rgba(201,168,76,0.6);
-  box-shadow: 0 0 0 2px rgba(201,168,76,0.15);
+/* Works for both <input> focus and wrapper <div>:focus-within */
+.input-base:focus,
+.input-base:focus-within {
+  outline: none;
+  border-color: rgba(201,168,76,0.55);
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.14);
 }
 
-.input-base:hover:not(:focus) {
+.input-base:hover:not(:focus):not(:focus-within) {
   border-color: var(--ink-500);
+  background: var(--ink-700);
 }
 
 [data-theme="light"] .input-base {
+  background: var(--ink-900);
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+/* Primary button */
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl
+    font-semibold text-sm cursor-pointer
+    transition-all duration-200;
+  background: #C9A84C;
+  color: var(--ink-950);
+  box-shadow: 0 2px 12px rgba(201,168,76,0.25);
+}
+.btn-primary:hover {
+  background: #DFC070;
+  box-shadow: 0 4px 20px rgba(201,168,76,0.4);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 6px rgba(201,168,76,0.2);
+}
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Ghost button */
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl
+    text-sm cursor-pointer transition-all duration-200;
+  border: 1px solid var(--ink-600);
+  color: var(--ivory-muted);
+  background: transparent;
+}
+.btn-ghost:hover {
+  border-color: rgba(201,168,76,0.25);
+  color: var(--ivory);
+  background: rgba(201,168,76,0.06);
+}
+.btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* Card */
 .card {
-  border-radius: 0.75rem;
+  border-radius: 0.875rem;
   padding: 1.25rem;
   background: var(--ink-800);
   border: 1px solid var(--ink-600);
-  transition: background 0.3s ease, border-color 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Glassmorphism card */
+.card-glass {
+  border-radius: 1rem;
+  padding: 1.5rem;
+  background: rgba(22, 22, 28, 0.75);
+  border: 1px solid rgba(201,168,76,0.12);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+[data-theme="light"] .card-glass {
+  background: rgba(248, 245, 240, 0.85);
+  border-color: rgba(201,168,76,0.2);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+/* Background orb */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+  pointer-events: none;
+  will-change: transform;
 }
 
 /* Section label */
 .section-label {
-  @apply text-xs font-semibold uppercase tracking-widest font-mono mb-3;
-  color: rgba(201,168,76,0.8);
+  @apply text-[10px] font-bold uppercase tracking-[0.2em] font-mono mb-3;
+  color: rgba(201,168,76,0.75);
+  letter-spacing: 0.2em;
+}
+
+/* Section divider */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ink-600) 20%, var(--ink-600) 80%, transparent);
+  margin: 1rem 0;
 }
 
 /* Animated underline */

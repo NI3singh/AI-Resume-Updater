@@ -95,15 +95,21 @@ function SectionRow({
     <Reorder.Item
       value={section}
       dragListener={!editing}
-      className={`group flex items-center gap-1.5 px-2 py-2 rounded-lg border transition-all duration-150 cursor-pointer select-none ${
+      className={`group relative flex items-center gap-1.5 px-2 py-2 rounded-lg border transition-all duration-150 cursor-pointer select-none ${
         isActive
-          ? 'bg-gold/10 border-gold/30'
-          : 'hover:bg-ink-700/60 border-transparent'
+          ? 'bg-gold/10 border-gold/25'
+          : 'hover:bg-ink-700/50 border-transparent'
       }`}
-      whileDrag={{ scale: 1.02, boxShadow: '0 4px 20px rgba(0,0,0,0.4)', zIndex: 50 }}
+      whileDrag={{ scale: 1.02, boxShadow: '0 4px 24px rgba(0,0,0,0.45)', zIndex: 50 }}
     >
+      {/* Left-edge completeness indicator */}
+      <div className={`absolute left-0 top-2 bottom-2 w-[2.5px] rounded-full transition-all duration-300 ${
+        pct === 100 ? 'bg-jade' :
+        pct > 0    ? 'bg-gold/60' :
+        'bg-transparent'
+      }`} />
       {/* Drag handle */}
-      <div className="flex-shrink-0 cursor-grab active:cursor-grabbing p-0.5 text-ivory-muted hover:text-ivory transition-colors">
+      <div className="flex-shrink-0 cursor-grab active:cursor-grabbing p-0.5 text-ivory-dim hover:text-ivory transition-colors ml-1">
         <GripVertical size={13} />
       </div>
 
@@ -152,14 +158,18 @@ function SectionRow({
           </div>
         ) : (
           <div className="hidden group-hover:flex items-center gap-0.5">
-            <button onClick={startEdit}
-              className="p-1 text-ivory-muted hover:text-ivory transition-colors"
-              title="Rename section">
+            <button
+              onClick={startEdit}
+              className="p-1 text-ivory-dim hover:text-ivory transition-colors cursor-pointer"
+              title="Rename section"
+            >
               <Pencil size={11} />
             </button>
-            <button onClick={e => { e.stopPropagation(); onDelete(); }}
-              className="p-1 text-ivory-muted hover:text-crimson transition-colors"
-              title="Remove section from resume">
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(); }}
+              className="p-1 text-ivory-dim hover:text-crimson transition-colors cursor-pointer"
+              title="Remove section from resume"
+            >
               <Trash2 size={11} />
             </button>
           </div>
@@ -211,22 +221,28 @@ export default function FormPanel({
         {/* Personal — fixed, not reorderable */}
         <button
           onClick={() => onSectionChange('personal')}
-          className={`w-full flex items-center justify-between px-2 py-2 rounded-lg border mb-0.5 transition-all duration-150 ${
+          className={`group relative w-full flex items-center justify-between px-2 py-2 rounded-lg border mb-0.5 transition-all duration-150 cursor-pointer ${
             activeSection === 'personal'
-              ? 'bg-gold/10 border-gold/30'
-              : 'hover:bg-ink-700/60 border-transparent'
+              ? 'bg-gold/10 border-gold/25'
+              : 'hover:bg-ink-700/50 border-transparent'
           }`}
         >
-          <div className="flex items-center gap-2">
-            <User size={13} className={activeSection === 'personal' ? 'text-gold' : 'text-ivory-muted'} />
-            <span className={`text-xs font-medium ${activeSection === 'personal' ? 'text-ivory' : 'text-ivory-muted'}`}>
+          {/* Left-edge indicator */}
+          <div className={`absolute left-0 top-2 bottom-2 w-[2.5px] rounded-full transition-all duration-300 ${
+            getCompleteness(data, 'personal') === 100 ? 'bg-jade' :
+            getCompleteness(data, 'personal') > 0     ? 'bg-gold/60' :
+            'bg-transparent'
+          }`} />
+          <div className="flex items-center gap-2 ml-1">
+            <User size={13} className={activeSection === 'personal' ? 'text-gold' : 'text-ivory-dim group-hover:text-ivory-muted'} />
+            <span className={`text-xs font-medium ${activeSection === 'personal' ? 'text-ivory' : 'text-ivory-muted group-hover:text-ivory'}`}>
               Personal
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {getCompleteness(data, 'personal') === 100 && <div className="w-1.5 h-1.5 rounded-full bg-jade" />}
             {getCompleteness(data, 'personal') > 0 && getCompleteness(data, 'personal') < 100 && <div className="w-1.5 h-1.5 rounded-full bg-gold/60" />}
-            <span className="text-[9px] font-mono text-ivory-muted ml-1">fixed</span>
+            <span className="text-[9px] font-mono text-ivory-dim/60">fixed</span>
           </div>
         </button>
 
@@ -251,13 +267,13 @@ export default function FormPanel({
         </Reorder.Group>
 
         {/* Add removed sections back */}
-        <div className="relative mt-1.5">
+        <div className="relative mt-2">
           {removedSections.length > 0 && (
             <button
               onClick={() => setShowAddMenu(!showAddMenu)}
-              className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[10px] text-ivory-muted hover:text-ivory border border-dashed border-ink-600 hover:border-ink-500 rounded-lg transition-all"
+              className="group w-full flex items-center gap-1.5 px-2 py-1.5 text-[10px] text-ivory-dim hover:text-ivory border border-dashed border-ink-600/70 hover:border-gold/25 hover:bg-gold/[0.04] rounded-lg transition-all duration-200 cursor-pointer"
             >
-              <Plus size={10} />
+              <Plus size={10} className="group-hover:rotate-90 transition-transform duration-200" />
               Add removed section back
             </button>
           )}
@@ -299,7 +315,7 @@ export default function FormPanel({
           </AnimatePresence>
         </div>
 
-        <div className="h-px bg-ink-700 my-3" />
+        <div className="section-divider mt-3 mb-0" />
       </div>
 
       {/* Section Content */}

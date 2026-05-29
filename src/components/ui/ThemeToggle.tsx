@@ -85,7 +85,7 @@ export default function ThemeToggle() {
               exit={{ rotate: -90, opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <Moon size={10} className="text-ink-800" strokeWidth={2.5} />
+              <Moon size={10} style={{ color: '#1E1B4B' }} strokeWidth={2.5} />
             </motion.div>
           )}
         </AnimatePresence>

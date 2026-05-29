@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, FileText, Upload, Cpu, Download, CheckCircle, Zap } from 'lucide-react';
+import { ArrowRight, FileText, Upload, Cpu, Download, CheckCircle, Zap, ExternalLink } from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { useAuth } from '@/context/AuthContext';
 
@@ -23,71 +23,81 @@ const steps = [
 export default function HomePage() {
   const { user, loading, signOut } = useAuth();
 
-  // Extract first name from email (e.g. "nitin" from "nitin@gmail.com")
   const firstName = user?.email
     ? user.email.split('@')[0].charAt(0).toUpperCase() + user.email.split('@')[0].slice(1)
     : null;
 
   return (
     <div className="min-h-screen bg-ink-950 overflow-x-hidden">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-5 border-b border-ink-800/60 backdrop-blur-md bg-ink-950/80">
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded border border-gold/40 flex items-center justify-center">
+
+      {/* ── Floating Navbar ───────────────────────────────────────────────── */}
+      <nav className="fixed top-4 left-4 right-4 z-50 flex items-center justify-between px-5 py-3 rounded-2xl border border-ink-700/60 backdrop-blur-xl bg-ink-900/80 shadow-xl shadow-black/30">
+        {/* Logo */}
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg border border-gold/50 bg-gold/10 flex items-center justify-center shadow-sm shadow-gold/10">
             <span className="text-gold text-xs font-mono font-bold">λ</span>
           </div>
-          <span className="font-display font-medium text-ivory text-sm tracking-wide">ResumeTeX</span>
+          <span className="font-display font-bold text-ivory text-sm tracking-tight">ResumeTeX</span>
         </div>
-        <div className="flex items-center gap-6">
-          <a href="https://latex.online" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-ivory-muted hover:text-ivory transition-colors animated-underline">LaTeX.online</a>
+
+        {/* Right nav */}
+        <div className="flex items-center gap-4">
+          <a
+            href="https://latex.online"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1 text-xs font-medium text-ivory-muted hover:text-ivory transition-colors duration-200 animated-underline"
+          >
+            LaTeX.online
+            <ExternalLink size={10} className="opacity-50" />
+          </a>
           <ThemeToggle />
           {loading ? (
-            // Skeleton while auth resolves
             <div className="w-24 h-8 rounded-lg bg-ink-700 animate-pulse" />
           ) : user ? (
-            // ── Logged-in state ──
             <div className="flex items-center gap-3">
-              <span className="text-xs text-ivory-muted font-mono">
-                Hey, <span className="text-ivory font-semibold">{firstName}</span> 👋
+              <span className="hidden sm:block text-xs text-ivory-muted font-mono">
+                Hey, <span className="text-ivory font-semibold">{firstName}</span>
               </span>
               <Link
                 href="/builder"
-                className="px-4 py-2 text-xs font-semibold bg-gold text-ink-950 rounded-lg hover:bg-gold-light transition-colors"
+                className="btn-primary !px-4 !py-1.5 !text-xs !rounded-lg"
               >
-                Open Builder →
+                Open Builder
+                <ArrowRight size={12} />
               </Link>
               <button
                 onClick={() => signOut()}
-                className="text-xs text-ivory-dim hover:text-ivory-muted transition-colors"
+                className="text-xs text-ivory-dim hover:text-ivory-muted transition-colors cursor-pointer"
               >
                 Sign out
               </button>
             </div>
           ) : (
-            // ── Guest state ──
-            <div className="flex items-center gap-3">
-              <Link href="/login" className="text-xs font-medium text-ivory-muted hover:text-ivory transition-colors">
+            <div className="flex items-center gap-2">
+              <Link href="/login" className="text-xs font-medium text-ivory-muted hover:text-ivory transition-colors duration-200">
                 Log In
               </Link>
               <Link
                 href="/login"
-                className="px-4 py-2 text-xs font-semibold bg-gold text-ink-950 rounded-lg hover:bg-gold-light transition-colors"
+                className="btn-primary !px-4 !py-1.5 !text-xs !rounded-lg"
               >
                 Get Started
+                <ArrowRight size={12} />
               </Link>
             </div>
           )}
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="relative min-h-screen flex items-center justify-center px-8 pt-20">
-        {/* Background */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-gold/5 blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-jade/5 blur-3xl" />
-          {/* Grid lines */}
-          <div className="absolute inset-0 opacity-[0.03]" style={{
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      <section className="relative min-h-screen flex items-center justify-center px-6 pt-24">
+        {/* Background orbs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="orb w-[600px] h-[600px] bg-gold/[0.06] top-[-100px] left-[-150px]" />
+          <div className="orb w-[500px] h-[500px] bg-jade/[0.05] bottom-[-80px] right-[-120px]" />
+          {/* Subtle grid */}
+          <div className="absolute inset-0 opacity-[0.025]" style={{
             backgroundImage: 'linear-gradient(#C9A84C 1px, transparent 1px), linear-gradient(90deg, #C9A84C 1px, transparent 1px)',
             backgroundSize: '80px 80px',
           }} />
@@ -99,9 +109,12 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gold/30 bg-gold/10 text-gold text-xs font-mono mb-8"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gold/25 bg-gold/[0.08] text-gold text-xs font-mono mb-8"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-gold" />
+            </span>
             LaTeX-powered. AI-assisted. Yours.
           </motion.div>
 
@@ -110,7 +123,7 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="font-display text-6xl md:text-7xl font-bold leading-[1.05] mb-6"
+            className="font-display text-6xl md:text-7xl font-extrabold leading-[1.05] tracking-tight mb-6"
           >
             Your Resume,
             <br />
@@ -122,88 +135,94 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-ivory-muted text-lg max-w-xl mx-auto mb-10 font-light leading-relaxed"
+            className="text-ivory/70 text-lg max-w-xl mx-auto mb-10 leading-relaxed"
           >
-            Fill your personal LaTeX resume template — manually or by uploading your old resume. 
+            Fill your personal LaTeX resume template — manually or by uploading your old resume.
             AI extracts everything. One click compiles to PDF.
           </motion.p>
 
-          {/* CTA — changes based on auth state */}
+          {/* CTAs */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex items-center justify-center gap-4"
+            className="flex items-center justify-center gap-3 flex-wrap"
           >
             {user ? (
-              // Logged-in: go straight to builder
               <>
-                <Link
-                  href="/builder"
-                  className="inline-flex items-center gap-2 px-7 py-3.5 bg-gold text-ink-950 font-semibold text-sm rounded-xl hover:bg-gold-light transition-all duration-300 hover:shadow-lg hover:shadow-gold/20 hover:-translate-y-0.5"
-                >
+                <Link href="/builder" className="btn-primary">
                   Open Builder
-                  <ArrowRight size={16} />
+                  <ArrowRight size={15} />
                 </Link>
-                <Link
-                  href="/builder?mode=upload"
-                  className="inline-flex items-center gap-2 px-7 py-3.5 border border-ink-600 text-ivory-muted text-sm rounded-xl hover:border-ivory/30 hover:text-ivory transition-all duration-300"
-                >
-                  <Upload size={15} />
+                <Link href="/builder?mode=upload" className="btn-ghost">
+                  <Upload size={14} />
                   Upload Resume
                 </Link>
               </>
             ) : (
-              // Guest: go to login
               <>
-                <Link
-                  href="/login"
-                  className="inline-flex items-center gap-2 px-7 py-3.5 bg-gold text-ink-950 font-semibold text-sm rounded-xl hover:bg-gold-light transition-all duration-300 hover:shadow-lg hover:shadow-gold/20 hover:-translate-y-0.5"
-                >
+                <Link href="/login" className="btn-primary">
                   Get Started Free
-                  <ArrowRight size={16} />
+                  <ArrowRight size={15} />
                 </Link>
-                <Link
-                  href="/login"
-                  className="inline-flex items-center gap-2 px-7 py-3.5 border border-ink-600 text-ivory-muted text-sm rounded-xl hover:border-ivory/30 hover:text-ivory transition-all duration-300"
-                >
+                <Link href="/login" className="btn-ghost">
                   Log In
                 </Link>
               </>
             )}
           </motion.div>
 
-          {/* Preview mockup */}
+          {/* Hero mockup */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.5 }}
             className="mt-16 relative"
           >
-            <div className="relative mx-auto max-w-3xl rounded-2xl border border-ink-700 bg-ink-900 overflow-hidden shadow-2xl shadow-black/60">
-              {/* Window bar */}
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-ink-700 bg-ink-800">
-                <div className="w-3 h-3 rounded-full bg-crimson/60" />
-                <div className="w-3 h-3 rounded-full bg-gold/60" />
-                <div className="w-3 h-3 rounded-full bg-jade/60" />
-                <div className="ml-4 text-xs font-mono text-ivory-dim">resume.tex — ResumeTeX Builder</div>
+            {/* Glow behind mockup */}
+            <div className="absolute -inset-4 bg-gold/[0.04] blur-3xl rounded-3xl" />
+            <div className="relative mx-auto max-w-3xl rounded-2xl border border-ink-700/80 bg-ink-900 overflow-hidden shadow-2xl shadow-black/70">
+              {/* Window chrome */}
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-ink-700/80 bg-ink-800/60">
+                <div className="w-2.5 h-2.5 rounded-full bg-crimson/70" />
+                <div className="w-2.5 h-2.5 rounded-full bg-gold/70" />
+                <div className="w-2.5 h-2.5 rounded-full bg-jade/70" />
+                <div className="ml-3 flex-1 flex items-center justify-center">
+                  <div className="px-3 py-0.5 rounded-md bg-ink-700/60 border border-ink-600/50 text-[10px] font-mono text-ivory-dim">
+                    resume.tex — ResumeTeX Builder
+                  </div>
+                </div>
               </div>
               {/* Split preview */}
-              <div className="grid grid-cols-2 min-h-[280px]">
+              <div className="grid grid-cols-2 min-h-[260px]">
                 {/* Form side */}
-                <div className="p-5 border-r border-ink-700">
-                  <div className="text-xs font-mono text-gold/70 mb-4">// Personal Info</div>
+                <div className="p-5 border-r border-ink-700/50">
+                  <div className="text-[10px] font-mono text-gold/60 mb-4 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gold/60" />
+                    Personal Info
+                  </div>
                   {['Full Name', 'Email Address', 'Phone Number', 'Location'].map((field, i) => (
                     <div key={field} className="mb-3">
-                      <div className="text-[10px] text-ivory-dim mb-1">{field}</div>
-                      <div className="h-7 rounded bg-ink-700 border border-ink-600 animate-pulse" style={{ animationDelay: `${i * 0.1}s`, width: `${70 + i * 5}%` }} />
+                      <div className="text-[9px] font-mono text-ivory-dim/60 mb-1 uppercase tracking-wider">{field}</div>
+                      <div
+                        className="h-6 rounded-lg bg-ink-700/80 border border-ink-600/50 overflow-hidden"
+                        style={{ width: `${68 + i * 7}%` }}
+                      >
+                        <div
+                          className="h-full bg-gradient-to-r from-ink-600/30 to-transparent animate-pulse"
+                          style={{ animationDelay: `${i * 0.15}s` }}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
                 {/* Code side */}
-                <div className="p-5 bg-ink-900">
-                  <div className="text-xs font-mono text-gold/70 mb-4">// LaTeX Output</div>
-                  <pre className="text-[10px] font-mono text-ivory-muted leading-5 opacity-70">{`\\begin{document}
+                <div className="p-5 bg-ink-950/60">
+                  <div className="text-[10px] font-mono text-jade/60 mb-4 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-jade/60" />
+                    LaTeX Output
+                  </div>
+                  <pre className="text-[10px] font-mono leading-[18px] opacity-55">{`\\begin{document}
 \\textbf{\\Huge Alex Johnson}
 
 alex@email.com · +1 555 0192
@@ -220,13 +239,16 @@ San Francisco, CA
         </div>
       </section>
 
-      {/* Features */}
-      <section className="px-8 py-28 max-w-6xl mx-auto">
+      {/* ── Features ─────────────────────────────────────────────────────── */}
+      <section className="px-6 py-28 max-w-6xl mx-auto">
         <div className="text-center mb-16">
-          <div className="section-label text-center justify-center flex">Capabilities</div>
-          <h2 className="font-display text-4xl font-bold text-ivory">Everything you need</h2>
+          <div className="section-label flex justify-center">Capabilities</div>
+          <h2 className="font-display text-4xl font-bold text-ivory mt-2">Everything you need</h2>
+          <p className="text-ivory/50 text-sm mt-3 max-w-md mx-auto">
+            From raw data to publication-quality PDF — in seconds.
+          </p>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           {features.map((f, i) => (
             <motion.div
               key={f.title}
@@ -234,72 +256,116 @@ San Francisco, CA
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
-              className="card group hover:border-gold/30 transition-all duration-300"
+              className="card group cursor-default hover:border-gold/35 hover:shadow-lg hover:shadow-gold/[0.08] relative overflow-hidden"
             >
-              <div className="w-10 h-10 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center mb-4 group-hover:bg-gold/15 transition-colors">
+              {/* Top accent line on hover */}
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gold/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center mb-4 group-hover:bg-gold/20 group-hover:border-gold/35 transition-all duration-200">
                 <f.icon size={18} className="text-gold" />
               </div>
-              <h3 className="font-display font-semibold text-ivory text-base mb-2">{f.title}</h3>
-              <p className="text-ivory-muted text-xs leading-relaxed">{f.desc}</p>
+              <h3 className="font-display font-bold text-ivory text-sm mb-2 leading-snug">{f.title}</h3>
+              <p className="text-ivory/50 text-xs leading-relaxed">{f.desc}</p>
             </motion.div>
           ))}
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="px-8 py-20 border-t border-ink-800">
+      {/* ── How it works ─────────────────────────────────────────────────── */}
+      <section className="px-6 py-20 border-t border-ink-800/60">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-16">
-            <div className="section-label text-center justify-center flex">Process</div>
-            <h2 className="font-display text-4xl font-bold text-ivory">How it works</h2>
+            <div className="section-label flex justify-center">Process</div>
+            <h2 className="font-display text-4xl font-bold text-ivory mt-2">How it works</h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-10 relative">
+            {/* Connecting line */}
+            <div className="hidden md:block absolute top-7 left-[calc(16.67%+20px)] right-[calc(16.67%+20px)] h-px bg-gradient-to-r from-gold/25 via-gold/15 to-gold/25" />
             {steps.map((step, i) => (
               <motion.div
                 key={step.num}
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.15 }}
-                className="relative"
               >
-                {i < steps.length - 1 && (
-                  <div className="hidden md:block absolute top-5 left-full w-full h-px bg-gradient-to-r from-gold/20 to-transparent -translate-y-1/2 z-0" />
-                )}
-                <div className="font-mono text-3xl font-bold text-gold/20 mb-3">{step.num}</div>
-                <h3 className="font-display font-semibold text-ivory text-lg mb-2">{step.title}</h3>
-                <p className="text-ivory-muted text-sm leading-relaxed">{step.desc}</p>
+                {/* Numbered badge */}
+                <div className="w-14 h-14 rounded-2xl bg-ink-800 border border-ink-700 flex items-center justify-center mb-5 shadow-md shadow-black/20">
+                  <span className="font-mono text-lg font-bold text-gold/70">{step.num}</span>
+                </div>
+                <h3 className="font-display font-bold text-ivory text-base mb-2">{step.title}</h3>
+                <p className="text-ivory/50 text-sm leading-relaxed">{step.desc}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Footer */}
-      <section className="px-8 py-24 text-center">
-        <div className="max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-2 mb-4 text-xs font-mono text-jade">
+      {/* ── CTA ──────────────────────────────────────────────────────────── */}
+      <section className="relative px-6 py-28 text-center overflow-hidden">
+        {/* Glow background */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="orb w-[600px] h-[350px] bg-gold/[0.07] -top-16 left-1/2 -translate-x-1/2" />
+        </div>
+        <div className="relative z-10 max-w-2xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="inline-flex items-center gap-2 mb-5 text-xs font-mono text-jade px-3 py-1.5 rounded-full border border-jade/20 bg-jade/[0.08]"
+          >
             <CheckCircle size={12} />
             No account required. Runs in your browser.
-          </div>
-          <h2 className="font-display text-5xl font-bold text-ivory mb-6">
-            Build your resume <br />
-            <span className="text-shimmer">right now</span>
-          </h2>
-          <Link
-            href="/builder"
-            className="inline-flex items-center gap-2 px-8 py-4 bg-gold text-ink-950 font-semibold rounded-xl hover:bg-gold-light transition-all hover:shadow-xl hover:shadow-gold/20"
+          </motion.div>
+          <motion.h2
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 }}
+            className="font-display text-5xl font-extrabold text-ivory mb-4 tracking-tight"
           >
-            <Zap size={16} />
-            Launch Builder
-          </Link>
+            Build your resume<br />
+            <span className="text-shimmer">right now</span>
+          </motion.h2>
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.2 }}
+            className="text-ivory/50 text-sm mb-8"
+          >
+            No LaTeX knowledge needed. Just fill in your details.
+          </motion.p>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.25 }}
+          >
+            <Link href="/builder" className="btn-primary !px-8 !py-3.5 !text-sm">
+              <Zap size={15} />
+              Launch Builder
+            </Link>
+          </motion.div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-ink-800 px-8 py-6 flex items-center justify-between text-xs text-ivory-dim font-mono">
-        <span>ResumeTeX — LaTeX Resume Builder</span>
-        <span>Powered by LaTeX.online API + Claude AI</span>
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
+      <footer className="border-t border-ink-800/60 px-6 py-6">
+        <div className="max-w-6xl mx-auto flex items-center justify-between text-xs text-ivory-dim font-mono">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded border border-gold/30 bg-gold/[0.08] flex items-center justify-center">
+              <span className="text-gold text-[9px] font-bold">λ</span>
+            </div>
+            <span>ResumeTeX</span>
+          </div>
+          <div className="flex items-center gap-4 text-ink-500">
+            <a href="https://latex.online" target="_blank" rel="noopener noreferrer" className="hover:text-ivory-dim transition-colors duration-200">
+              LaTeX.online
+            </a>
+            <span className="text-ink-600">·</span>
+            <span>Powered by Claude AI</span>
+          </div>
+        </div>
       </footer>
     </div>
   );
