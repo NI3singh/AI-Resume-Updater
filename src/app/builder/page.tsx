@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Download, FileCode, Eye, Loader2,
   Zap, Copy, Check, Save, LogOut, CloudOff, Cloud,
-  Undo2, RotateCcw,
+  Undo2, RotateCcw, AlertTriangle,
 } from 'lucide-react';
 import { ResumeData, SectionConfig, BuilderMode, ActiveSection, ALL_SECTIONS } from '@/lib/types';
 import { generateLatex } from '@/lib/latexTemplate';
@@ -23,8 +23,7 @@ import { useResumes } from '@/hooks/useResumes';
 
 type PreviewTab = 'code' | 'preview';
 
-const AUTOSAVE_DELAY = 2000;
-const MAX_HISTORY    = 50;
+const MAX_HISTORY = 50;
 
 // ── Snapshot stored in undo history ─────────────────────────────────────────
 interface Snapshot {
@@ -84,22 +83,19 @@ function BuilderContent() {
     setTimeout(() => { skipPush.current = false; }, 50);
   }, []);
 
-  // ── Autosave ─────────────────────────────────────────────────────────────────
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isDirty       = useRef(false);
-  const lastSaved     = useRef<Snapshot | null>(null);
+  // ── Manual save / unsaved-changes tracking (no autosave) ────────────────────
+  // lastSaved holds the most recent persisted snapshot; Revert restores to it.
+  const lastSaved = useRef<Snapshot | null>(null);
+  const [hasUnsaved, setHasUnsaved] = useState(false);
 
-  const triggerAutosave = useCallback((data: ResumeData, config: SectionConfig[]) => {
-    isDirty.current = true;
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(() => {
-      if (activeResume && isDirty.current) {
-        save(activeResume.id, data, config);
-        lastSaved.current = { resumeData: data, sectionConfig: config };
-        isDirty.current = false;
-      }
-    }, AUTOSAVE_DELAY);
-  }, [activeResume, save]);
+  // Confirmation dialog shown before Save / Revert / Regenerate act.
+  const [confirmDialog, setConfirmDialog] = useState<null | {
+    title: string;
+    message: string;
+    confirmLabel: string;
+    tone: 'gold' | 'crimson';
+    onConfirm: () => void;
+  }>(null);
 
   // ── Load active resume ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -115,7 +111,7 @@ function BuilderContent() {
     undoStack.current  = [snap];
     undoIndex.current  = 0;
     setUndoCount(0);
-    isDirty.current = false;
+    setHasUnsaved(false);
     setTimeout(() => { skipPush.current = false; }, 50);
   }, [activeResume?.id]);
 
@@ -142,19 +138,19 @@ function BuilderContent() {
   const handleDataChange = (data: ResumeData) => {
     setResumeData(data);
     pushHistory({ resumeData: data, sectionConfig });
-    triggerAutosave(data, sectionConfig);
+    setHasUnsaved(true);
   };
 
   const handleConfigChange = (config: SectionConfig[]) => {
     setSectionConfig(config);
     if (resumeData) {
       pushHistory({ resumeData, sectionConfig: config });
-      triggerAutosave(resumeData, config);
+      setHasUnsaved(true);
     }
   };
 
-  // ── Restore to last cloud-saved state ────────────────────────────────────────
-  const handleRestoreCloud = useCallback(() => {
+  // ── Revert to the last saved version (discard unsaved edits) ────────────────
+  const doRevert = useCallback(() => {
     if (!lastSaved.current) return;
     skipPush.current = true;
     setResumeData(lastSaved.current.resumeData);
@@ -162,17 +158,39 @@ function BuilderContent() {
     undoStack.current = [lastSaved.current];
     undoIndex.current = 0;
     setUndoCount(0);
-    isDirty.current = false;
+    setHasUnsaved(false);
     setTimeout(() => { skipPush.current = false; }, 50);
   }, []);
 
-  // ── Manual save ──────────────────────────────────────────────────────────────
-  const handleManualSave = () => {
+  const requestRevert = () => {
+    if (!hasUnsaved) return; // nothing to discard
+    setConfirmDialog({
+      title: 'Revert to last saved version?',
+      message: `This discards your unsaved changes to "${activeResume?.name ?? 'this resume'}" and restores the last saved version.`,
+      confirmLabel: 'Revert',
+      tone: 'crimson',
+      onConfirm: () => { doRevert(); setConfirmDialog(null); },
+    });
+  };
+
+  // ── Manual save (with confirmation) ─────────────────────────────────────────
+  const doSave = useCallback(() => {
     if (activeResume && resumeData) {
       save(activeResume.id, resumeData, sectionConfig);
       lastSaved.current = { resumeData, sectionConfig };
-      isDirty.current = false;
+      setHasUnsaved(false);
     }
+  }, [activeResume, resumeData, sectionConfig, save]);
+
+  const requestSave = () => {
+    if (!activeResume || !resumeData) return;
+    setConfirmDialog({
+      title: 'Save changes?',
+      message: `This overwrites "${activeResume.name}" with your current content.`,
+      confirmLabel: 'Save',
+      tone: 'gold',
+      onConfirm: () => { doSave(); setConfirmDialog(null); },
+    });
   };
 
   // ── Compile / Download ───────────────────────────────────────────────────────
@@ -207,8 +225,8 @@ function BuilderContent() {
   const handleParsedResume = useCallback((data: ResumeData) => {
     setResumeData(data); setMode('manual'); setActiveSection('personal');
     pushHistory({ resumeData: data, sectionConfig });
-    triggerAutosave(data, sectionConfig);
-  }, [pushHistory, triggerAutosave, sectionConfig]);
+    setHasUnsaved(true);
+  }, [pushHistory, sectionConfig]);
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (authLoading || resumesLoading || !resumeData) {
@@ -268,6 +286,11 @@ function BuilderContent() {
           <CloudOff size={10} /> Save failed
         </motion.span>
       </AnimatePresence>
+    );
+    if (hasUnsaved) return (
+      <span className="flex items-center gap-1.5 text-[10px] text-gold/80 font-mono">
+        <span className="w-1.5 h-1.5 rounded-full bg-gold/80" /> Unsaved
+      </span>
     );
     return null;
   };
@@ -362,24 +385,35 @@ function BuilderContent() {
             {canUndo && <span className="font-mono text-[10px] text-ink-500">{undoCount}</span>}
           </button>
 
-          {/* Rollback — icon only below lg */}
+          {/* Revert — discard unsaved changes, restore last saved version */}
           <button
-            onClick={handleRestoreCloud}
-            title="Restore last cloud-saved version"
-            className="flex items-center gap-1 px-2 py-1.5 text-xs border border-ink-600/80 text-ivory-muted rounded-lg hover:border-crimson/40 hover:text-crimson transition-all duration-200 cursor-pointer"
+            onClick={requestRevert}
+            disabled={!hasUnsaved}
+            title="Revert to last saved version (discard unsaved changes)"
+            className={`flex items-center gap-1 px-2 py-1.5 text-xs border rounded-lg transition-all duration-200 ${
+              !hasUnsaved
+                ? 'border-ink-700 text-ink-500 cursor-not-allowed opacity-40'
+                : 'border-ink-600/80 text-ivory-muted hover:border-crimson/40 hover:text-crimson cursor-pointer'
+            }`}
           >
             <RotateCcw size={12} />
-            <span className="hidden lg:block">Rollback</span>
+            <span className="hidden lg:block">Revert</span>
           </button>
 
           {/* Save — icon only below lg */}
           <button
-            onClick={handleManualSave}
+            onClick={requestSave}
             disabled={saveStatus === 'saving'}
-            className="flex items-center gap-1 px-2 py-1.5 text-xs border border-ink-600/80 text-ivory-muted rounded-lg hover:border-ivory/25 hover:text-ivory transition-all duration-200 disabled:opacity-50 cursor-pointer"
+            title="Save changes"
+            className={`relative flex items-center gap-1 px-2 py-1.5 text-xs border rounded-lg transition-all duration-200 disabled:opacity-50 cursor-pointer ${
+              hasUnsaved
+                ? 'border-gold/50 text-gold hover:bg-gold/10'
+                : 'border-ink-600/80 text-ivory-muted hover:border-ivory/25 hover:text-ivory'
+            }`}
           >
             <Save size={12} />
             <span className="hidden lg:block">Save</span>
+            {hasUnsaved && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-gold shadow-sm shadow-gold/40" />}
           </button>
 
           {/* Download .tex — icon only below lg */}
@@ -564,6 +598,60 @@ function BuilderContent() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* ── Confirmation dialog (Save / Revert / Regenerate) ─────────────────── */}
+      <AnimatePresence>
+        {confirmDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setConfirmDialog(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.15 }}
+              className="card-glass w-full max-w-sm"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3 mb-5">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border ${
+                  confirmDialog.tone === 'crimson'
+                    ? 'bg-crimson/10 border-crimson/30 text-crimson'
+                    : 'bg-gold/10 border-gold/30 text-gold'
+                }`}>
+                  <AlertTriangle size={16} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-display font-bold text-ivory text-sm">{confirmDialog.title}</h3>
+                  <p className="text-ivory/60 text-xs mt-1 leading-relaxed">{confirmDialog.message}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setConfirmDialog(null)}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-ink-600/80 text-ivory-muted hover:text-ivory hover:bg-ink-800/50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDialog.onConfirm}
+                  className={`px-3 py-1.5 text-xs rounded-lg font-semibold cursor-pointer transition-colors ${
+                    confirmDialog.tone === 'crimson'
+                      ? 'bg-crimson text-white hover:bg-crimson/90'
+                      : 'bg-gold text-ink-950 hover:bg-gold-light'
+                  }`}
+                >
+                  {confirmDialog.confirmLabel}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

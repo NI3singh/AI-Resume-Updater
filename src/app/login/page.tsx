@@ -3,14 +3,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { ApiError } from '@/lib/api';
 import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
   const router   = useRouter();
-  const { user, loading } = useAuth();
-  const supabase = createClient();
+  const { user, loading, signIn, signUp } = useAuth();
 
   const [mode, setMode]             = useState<'login' | 'signup'>('login');
   const [email, setEmail]           = useState('');
@@ -28,23 +27,26 @@ export default function LoginPage() {
     if (!email || !password) { setError('Please fill in all fields.'); return; }
     setSubmitting(true); setError(''); setSuccess('');
 
-    if (mode === 'signup') {
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        setError(error.message);
-      } else if (data.user && data.user.identities && data.user.identities.length === 0) {
+    try {
+      if (mode === 'signup') {
+        await signUp(email, password);
+      } else {
+        await signIn(email, password);
+      }
+      router.replace('/');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Account already exists — nudge the user to log in instead.
         setError('An account with this email already exists. Please log in instead.');
         setMode('login');
+      } else if (err instanceof ApiError) {
+        setError(err.message);
       } else {
-        setSuccess('Account created! Check your email to confirm, then log in.');
-        setMode('login');
+        setError('Something went wrong. Is the backend running?');
       }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
-      else router.replace('/');
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   if (loading) return (
