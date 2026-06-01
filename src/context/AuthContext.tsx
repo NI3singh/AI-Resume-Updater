@@ -1,54 +1,75 @@
 // src/context/AuthContext.tsx
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { createClient } from '@/lib/supabase/client';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { api } from '@/lib/api';
+
+export interface AppUser {
+  id: string;
+  email: string;
+  display_name: string | null;
+}
+
+interface AuthResponse {
+  user: AppUser;
+}
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AppUser | null;
   loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
-  user: null, session: null, loading: true,
+  user: null,
+  loading: true,
+  signIn: async () => {},
+  signUp: async () => {},
   signOut: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser]       = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser]       = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
 
+  // Bootstrap: ask the backend who we are (cookie-based). 401 => logged out.
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
-
-    return () => subscription.unsubscribe();
+    let cancelled = false;
+    api<AuthResponse>('/auth/me')
+      .then((res) => { if (!cancelled) setUser(res.user); })
+      .catch(() => { if (!cancelled) setUser(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
+  const signIn = useCallback(async (email: string, password: string) => {
+    const res = await api<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    setUser(res.user);
+  }, []);
+
+  const signUp = useCallback(async (email: string, password: string) => {
+    const res = await api<AuthResponse>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    setUser(res.user);
+  }, []);
+
+  const signOut = useCallback(async () => {
+    try {
+      await api('/auth/logout', { method: 'POST' });
+    } finally {
+      setUser(null);
+    }
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

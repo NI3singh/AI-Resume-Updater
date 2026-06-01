@@ -2,12 +2,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { ResumeData, SectionConfig, defaultResumeData, ALL_SECTIONS } from '@/lib/types';
+import { api, ApiError } from '@/lib/api';
+import { ResumeData, SectionConfig } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 
 export interface ResumeRecord {
   id: string;
+  user_id: string;
   name: string;
   is_master: boolean;
   resume_data: ResumeData;
@@ -16,174 +17,156 @@ export interface ResumeRecord {
   updated_at: string;
 }
 
+interface ResumesResponse {
+  resumes: ResumeRecord[];
+}
+
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 export function useResumes() {
   const { user } = useAuth();
-  const supabase = createClient();
 
-  const [resumes, setResumes]             = useState<ResumeRecord[]>([]);
-  const [activeResume, setActiveResume]   = useState<ResumeRecord | null>(null);
-  const [loading, setLoading]             = useState(true);
-  const [saveStatus, setSaveStatus]       = useState<SaveStatus>('idle');
+  const [resumes, setResumes]         = useState<ResumeRecord[]>([]);
+  const [activeResume, setActiveResume] = useState<ResumeRecord | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [saveStatus, setSaveStatus]   = useState<SaveStatus>('idle');
 
-  // ── Fetch all resumes for user ─────────────────────────────────────────────
-  const fetchResumes = useCallback(async () => {
-    if (!user) return;
-
-    // Ensure the Supabase session is valid before querying.
-    // On hard-refresh, the client-side session can lag behind the auth context.
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session) return;
-
-    const { data, error } = await supabase
-      .from('resumes')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('is_master', { ascending: false }) // master first
-      .order('created_at', { ascending: true });
-
-    if (error) { console.error('fetchResumes:', error); return; }
-    return data as ResumeRecord[];
-  }, [user]);
-
-  // ── On mount: fetch or create master ──────────────────────────────────────
+  // ── Load all resumes (master + versions) for the signed-in user ──────────────
   useEffect(() => {
-    if (!user) return;
-
-    (async () => {
-      setLoading(true);
-
-      // Retry up to 3 times with exponential backoff to handle transient
-      // session-timing errors (empty {} error on hard refresh).
-      let data: ResumeRecord[] | undefined;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        data = await fetchResumes();
-        if (data) break;
-        if (attempt < 2) {
-          await new Promise(res => setTimeout(res, 800 * Math.pow(2, attempt)));
-        }
-      }
-
-      if (!data) { setLoading(false); return; }
-
-      // If user has no master resume yet, create one from defaultResumeData
-      if (!data.find(r => r.is_master)) {
-        const { data: created, error } = await supabase
-          .from('resumes')
-          .insert({
-            user_id:        user.id,
-            name:           'Master Resume',
-            is_master:      true,
-            resume_data:    defaultResumeData,
-            section_config: ALL_SECTIONS,
-          })
-          .select()
-          .single();
-
-        if (error) { console.error('create master:', error); setLoading(false); return; }
-        data = [created as ResumeRecord, ...data];
-      }
-
-      setResumes(data);
-      // Open master by default
-      setActiveResume(data.find(r => r.is_master) ?? data[0]);
+    if (!user) {
+      setResumes([]);
+      setActiveResume(null);
       setLoading(false);
-    })();
-  }, [user]);
+      setSaveStatus('idle');
+      return;
+    }
 
-  // ── Save (update) a resume ─────────────────────────────────────────────────
+    let cancelled = false;
+    setLoading(true);
+    setSaveStatus('idle');
+
+    api<ResumesResponse>('/resumes')
+      .then((res) => {
+        if (cancelled) return;
+        const records = res.resumes;
+        setResumes(records);
+        setActiveResume(records.find((r) => r.is_master) ?? records[0] ?? null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('fetchResumes:', err instanceof ApiError ? err.message : err);
+        setResumes([]);
+        setActiveResume(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  // ── Helper: replace a record everywhere it lives in state ────────────────────
+  const applyRecord = useCallback((updated: ResumeRecord) => {
+    setResumes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setActiveResume((prev) => (prev?.id === updated.id ? updated : prev));
+  }, []);
+
   const save = useCallback(async (
     id: string,
     resumeData: ResumeData,
     sectionConfig: SectionConfig[]
   ) => {
+    if (!user) return;
+
     setSaveStatus('saving');
-    const { error } = await supabase
-      .from('resumes')
-      .update({ resume_data: resumeData, section_config: sectionConfig })
-      .eq('id', id);
+    try {
+      const updated = await api<ResumeRecord>(`/resumes/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ resume_data: resumeData, section_config: sectionConfig }),
+      });
+      applyRecord(updated);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      console.error('save:', err instanceof ApiError ? err.message : err);
+      setSaveStatus('error');
+    }
+  }, [user, applyRecord]);
 
-    if (error) { console.error('save:', error); setSaveStatus('error'); return; }
-
-    setResumes(prev => prev.map(r =>
-      r.id === id ? { ...r, resume_data: resumeData, section_config: sectionConfig } : r
-    ));
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus('idle'), 2000);
-  }, []);
-
-  // ── Rename a resume ────────────────────────────────────────────────────────
   const rename = useCallback(async (id: string, name: string) => {
-    const { error } = await supabase.from('resumes').update({ name }).eq('id', id);
-    if (error) { console.error('rename:', error); return; }
-    setResumes(prev => prev.map(r => r.id === id ? { ...r, name } : r));
-    setActiveResume(prev => prev?.id === id ? { ...prev, name } : prev);
-  }, []);
+    if (!user) return;
+    try {
+      const updated = await api<ResumeRecord>(`/resumes/${id}/name`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      });
+      applyRecord(updated);
+    } catch (err) {
+      console.error('rename:', err instanceof ApiError ? err.message : err);
+    }
+  }, [user, applyRecord]);
 
-  // ── Fork from master (create a new version) ────────────────────────────────
   const forkFromMaster = useCallback(async (versionName: string) => {
     if (!user) return null;
-    const master = resumes.find(r => r.is_master);
-    if (!master) return null;
+    try {
+      const created = await api<ResumeRecord>('/resumes/fork', {
+        method: 'POST',
+        body: JSON.stringify({ name: versionName }),
+      });
+      setResumes((prev) => [...prev, created]);
+      setActiveResume(created);
+      return created;
+    } catch (err) {
+      console.error('fork:', err instanceof ApiError ? err.message : err);
+      return null;
+    }
+  }, [user]);
 
-    const { data, error } = await supabase
-      .from('resumes')
-      .insert({
-        user_id:        user.id,
-        name:           versionName,
-        is_master:      false,
-        resume_data:    master.resume_data,
-        section_config: master.section_config,
-      })
-      .select()
-      .single();
-
-    if (error) { console.error('fork:', error); return null; }
-
-    const newRecord = data as ResumeRecord;
-    setResumes(prev => [...prev, newRecord]);
-    setActiveResume(newRecord);
-    return newRecord;
-  }, [user, resumes]);
-
-  // ── Restore this version to match master ──────────────────────────────────
   const restoreToMaster = useCallback(async (id: string) => {
-    const master = resumes.find(r => r.is_master);
-    if (!master) return;
-    await save(id, master.resume_data, master.section_config);
-    setActiveResume(prev =>
-      prev?.id === id
-        ? { ...prev, resume_data: master.resume_data, section_config: master.section_config }
-        : prev
-    );
-  }, [resumes, save]);
+    if (!user) return;
+    try {
+      const updated = await api<ResumeRecord>(`/resumes/${id}/restore-from-master`, {
+        method: 'POST',
+      });
+      applyRecord(updated);
+    } catch (err) {
+      console.error('restore:', err instanceof ApiError ? err.message : err);
+    }
+  }, [user, applyRecord]);
 
-  // ── Delete a version (master cannot be deleted) ───────────────────────────
   const deleteResume = useCallback(async (id: string) => {
-    const target = resumes.find(r => r.id === id);
+    if (!user) return;
+
+    const target = resumes.find((r) => r.id === id);
     if (!target || target.is_master) return;
 
-    const { error } = await supabase.from('resumes').delete().eq('id', id);
-    if (error) { console.error('delete:', error); return; }
-
-    const remaining = resumes.filter(r => r.id !== id);
-    setResumes(remaining);
-
-    // If we deleted the active one, switch to master
-    if (activeResume?.id === id) {
-      setActiveResume(remaining.find(r => r.is_master) ?? remaining[0]);
+    try {
+      await api(`/resumes/${id}`, { method: 'DELETE' });
+      const remaining = resumes.filter((r) => r.id !== id);
+      setResumes(remaining);
+      if (activeResume?.id === id) {
+        setActiveResume(remaining.find((r) => r.is_master) ?? remaining[0] ?? null);
+      }
+    } catch (err) {
+      console.error('delete:', err instanceof ApiError ? err.message : err);
     }
-  }, [resumes, activeResume]);
+  }, [user, resumes, activeResume]);
 
-  // ── Switch active resume ───────────────────────────────────────────────────
   const switchTo = useCallback((id: string) => {
-    const found = resumes.find(r => r.id === id);
+    const found = resumes.find((r) => r.id === id);
     if (found) setActiveResume(found);
   }, [resumes]);
 
   return {
-    resumes, activeResume, loading, saveStatus,
-    save, rename, forkFromMaster, restoreToMaster, deleteResume, switchTo,
+    resumes,
+    activeResume,
+    loading,
+    saveStatus,
+    save,
+    rename,
+    forkFromMaster,
+    restoreToMaster,
+    deleteResume,
+    switchTo,
   };
 }

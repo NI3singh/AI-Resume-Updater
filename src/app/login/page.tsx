@@ -3,14 +3,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { ApiError } from '@/lib/api';
 import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
   const router   = useRouter();
-  const { user, loading } = useAuth();
-  const supabase = createClient();
+  const { user, loading, signIn, signUp } = useAuth();
 
   const [mode, setMode]             = useState<'login' | 'signup'>('login');
   const [email, setEmail]           = useState('');
@@ -26,25 +25,30 @@ export default function LoginPage() {
 
   const handleSubmit = async () => {
     if (!email || !password) { setError('Please fill in all fields.'); return; }
+    if (mode === 'signup' && password.length < 6) {
+      setError('Password must be at least 6 characters.'); return;
+    }
     setSubmitting(true); setError(''); setSuccess('');
 
-    if (mode === 'signup') {
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        setError(error.message);
-      } else if (data.user && data.user.identities && data.user.identities.length === 0) {
-        setError('An account with this email already exists. Please log in instead.');
-        setMode('login');
+    try {
+      if (mode === 'signup') {
+        await signUp(email, password);
       } else {
-        setSuccess('Account created! Check your email to confirm, then log in.');
+        await signIn(email, password);
+      }
+      // Both signup and login set the session cookie and return the user.
+      router.replace('/');
+    } catch (err) {
+      const message = err instanceof ApiError
+        ? err.message
+        : 'Something went wrong. Please try again.';
+      if (mode === 'signup' && err instanceof ApiError && err.status === 409) {
         setMode('login');
       }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
-      else router.replace('/');
+      setError(message);
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   if (loading) return (

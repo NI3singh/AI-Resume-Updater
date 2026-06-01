@@ -1,3 +1,45 @@
+### 📄 c:\Users\ELaunch\OneDrive\nitin-p\latex-resume-builder\backend\.env
+*Saved at: 6/1/2026, 9:19:20 AM*
+
+**[REMOVED]**
+```
+(from line ~2)
+JWT_SECRET=dev-only-secret-please-change-to-a-long-random-string-32chars-min
+
+```
+**[ADDED]**
+```
+2     JWT_SECRET=58974bbde0f798c83fe772dc1a8be3decdef5487b4f6264a4a0c7a81e479de6f
+```
+
+---
+
+### 📄 c:\Users\ELaunch\OneDrive\nitin-p\latex-resume-builder\backend\.env
+*Saved at: 6/1/2026, 9:18:07 AM*
+
+**[REMOVED]**
+```
+(from line ~1)
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/ai_resume_updater
+
+```
+**[ADDED]**
+```
+1     DATABASE_URL=postgresql+psycopg://postgres:elaunch1234@localhost:5432/ai_resume_updater
+```
+
+---
+
+### 📄 c:\Users\ELaunch\OneDrive\nitin-p\latex-resume-builder\supabase-schema.sql
+*Saved at: 5/29/2026, 5:18:52 PM*
+
+**[ADDED]**
+```
+109   
+```
+
+---
+
 ### 📄 c:\Users\ELaunch\OneDrive\nitin-p\latex-resume-builder\src\lib\latexTemplate.ts
 *Saved at: 5/29/2026, 4:22:38 PM*
 

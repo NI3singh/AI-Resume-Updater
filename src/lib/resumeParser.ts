@@ -1,5 +1,5 @@
 // src/lib/resumeParser.ts
-import { ResumeData, defaultResumeData } from './types';
+import { ResumeData, emptyResumeData } from './types';
 
 export async function parseResumeWithAI(text: string): Promise<ResumeData> {
   const prompt = `You are a resume parser. Extract ALL information from the following resume text and return it as a JSON object with EXACTLY this structure. Return ONLY raw JSON, no markdown, no explanation, no code fences.
@@ -119,7 +119,7 @@ ${text}`;
   try {
     const cleaned = result.text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleaned);
-    return { ...defaultResumeData, ...parsed };
+    return { ...emptyResumeData, ...parsed };
   } catch {
     throw new Error('Failed to parse AI response as JSON');
   }

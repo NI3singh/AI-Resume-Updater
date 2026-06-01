@@ -404,6 +404,279 @@ export const defaultResumeData: ResumeData = {
   ],
 };
 
+// Structured equivalent of resume_template.tex.
+// The editor persists ResumeData JSON, then latexTemplate.ts renders it to .tex.
+export const templateResumeData: ResumeData = {
+  personal: {
+    name: 'Your Full Name',
+    email: 'your.email@example.com',
+    phone: '(+XX) XXXXXXXXXX',
+    location: 'City, Country',
+    linkedin: 'https://www.linkedin.com/in/yourprofile/',
+    github: 'https://www.github.com/yourusername',
+    website: 'https://yourportfolio.com/',
+  },
+
+  education: [
+    {
+      id: 'edu_template_1',
+      institution: 'University Name',
+      location: 'City, State',
+      gpaLabel: 'Agg. CGPA: X.XX',
+      degree: 'Degree Name & Specialization',
+      startDate: 'Month YYYY',
+      endDate: 'Month YYYY',
+      highlight: "One-line academic highlight or achievement, such as dean's list or a perfect score.",
+    },
+  ],
+
+  skills: [
+    { id: 'skill_template_1', category: 'Languages', items: ['Language1 (proficiency)', 'Language2 (proficiency)', 'Language3 (proficiency)'] },
+    { id: 'skill_template_2', category: 'Tools & Technology', items: ['Tool1', 'Tool2', 'Tool3', 'Tool4', 'Tool5', 'Tool6', 'Tool7', 'Tool8', 'Tool9', 'Tool10'] },
+    { id: 'skill_template_3', category: 'Frameworks', items: ['Framework1', 'Framework2', 'Framework3', 'Framework4', 'Framework5', 'Framework6', 'Framework7'] },
+    { id: 'skill_template_4', category: 'Technical Domains', items: ['Domain1', 'Domain2', 'Domain3', 'Domain4', 'Domain5', 'Domain6', 'Domain7', 'Domain8', 'Domain9'] },
+    { id: 'skill_template_5', category: 'Data Analysis & Visualization', items: ['Skill1', 'Skill2', 'Skill3', 'Skill4', 'Skill5', 'Skill6', 'Skill7'] },
+    { id: 'skill_template_6', category: 'Databases & Cloud Platforms', items: ['Platform1', 'Platform2', 'Platform3'] },
+  ],
+
+  projects: [
+    {
+      id: 'proj_template_1',
+      name: 'Project Title One',
+      techStack: 'Tech Stack & Key Technologies Used',
+      githubUrl: 'https://github.com/yourusername/project-one',
+      liveUrl: '',
+      bullets: [
+        'Brief description of what the project does and what problem it solves.',
+        'Key technical decision or implementation detail that adds value.',
+        'Quantifiable result or metric achieved.',
+      ],
+    },
+    {
+      id: 'proj_template_2',
+      name: 'Project Title Two',
+      techStack: 'Tech Stack & Key Technologies Used',
+      githubUrl: 'https://github.com/yourusername/project-two',
+      liveUrl: 'https://your-live-demo-link.com/',
+      bullets: [
+        'What data or problem was analyzed or solved, including scope.',
+        'Description of the pipeline, feature engineering, or technical approach.',
+        'Business insight or measurable impact uncovered.',
+      ],
+    },
+    {
+      id: 'proj_template_3',
+      name: 'Project Title Three',
+      techStack: 'Tech Stack & Key Technologies Used',
+      githubUrl: 'https://github.com/yourusername/project-three',
+      liveUrl: '',
+      bullets: [
+        'End-to-end pipeline or system description.',
+        'Technical methodology, tools, algorithms, or techniques used.',
+        'Key insight discovered with concrete numbers where possible.',
+      ],
+    },
+    {
+      id: 'proj_template_4',
+      name: 'Project Title Four',
+      techStack: 'Tech Stack & Key Technologies Used',
+      githubUrl: 'https://github.com/yourusername/project-four',
+      liveUrl: 'https://your-live-demo-link.com/',
+      bullets: [
+        'What the system does at a high level.',
+        'Technical optimization made to improve performance, accuracy, or scale.',
+        'Deployment approach and how it ensures reliability.',
+      ],
+    },
+    {
+      id: 'proj_template_5',
+      name: 'Project Title Five',
+      techStack: 'Tech Stack & Key Technologies Used',
+      githubUrl: 'https://github.com/yourusername/project-five',
+      liveUrl: '',
+      bullets: [
+        'System architecture overview and component interactions.',
+        'Key algorithmic or prompting strategy implemented.',
+        'Evaluation methodology and future use case enabled.',
+      ],
+    },
+    {
+      id: 'proj_template_6',
+      name: 'Project Title Six',
+      techStack: 'Tech Stack & Key Technologies Used',
+      githubUrl: 'https://github.com/yourusername/project-six',
+      liveUrl: '',
+      bullets: [
+        'End-to-end pipeline description.',
+        'Model fine-tuning or optimization technique applied and its benefit.',
+        'Additional module or feature integrated to improve user experience.',
+      ],
+    },
+    {
+      id: 'proj_template_7',
+      name: 'Project Title Seven',
+      techStack: 'Tech Stack & Key Technologies Used',
+      githubUrl: 'https://github.com/yourusername/project-seven',
+      liveUrl: '',
+      bullets: [
+        'What problem the tool solves and what workflow it improves.',
+        'Core algorithm or detection logic, trigger mechanism, and output format.',
+      ],
+    },
+  ],
+
+  experience: [
+    {
+      id: 'exp_template_1',
+      role: 'Job Title',
+      company: 'Company Name',
+      location: 'City, State',
+      startDate: 'Month YYYY',
+      endDate: '',
+      current: true,
+      projectSubtitle: '',
+      bullets: [
+        'Led a project or initiative over a defined scope to achieve a clear goal.',
+        'Engineered a pipeline, system, or tool in a specific language or framework.',
+        'Deployed a product, model, or solution achieving a measurable result.',
+      ],
+    },
+    {
+      id: 'exp_template_2',
+      role: 'Job Title',
+      company: 'Company Name',
+      location: 'City, State',
+      startDate: 'Month YYYY',
+      endDate: 'Month YYYY',
+      current: false,
+      projectSubtitle: 'Project: Project Name | Tools/Technologies Used',
+      bullets: [
+        'Engineered a pipeline or system to perform ETL, analysis, or processing.',
+        'Conducted analysis to identify patterns, factors, or insights.',
+        'Synthesized findings into a deliverable that improved a team, product, or strategy.',
+      ],
+    },
+    {
+      id: 'exp_template_3',
+      role: 'Job Title',
+      company: 'Company Name',
+      location: 'City, State',
+      startDate: 'Month YYYY',
+      endDate: 'Month YYYY',
+      current: false,
+      projectSubtitle: 'Project: Project Name | Tools/Technologies Used',
+      bullets: [
+        'Analyzed a problem domain to design and build a product or system.',
+        'Investigated systems or processes to identify and resolve critical issues.',
+      ],
+    },
+  ],
+
+  extracurricular: [
+    {
+      id: 'extra_template_1',
+      title: 'Role/Position',
+      organization: 'Organization Name, Location',
+      startDate: 'Month YYYY',
+      endDate: 'Month YYYY',
+      bullets: ['Brief description of responsibilities, contributions, or what was built or organized.'],
+    },
+    {
+      id: 'extra_template_2',
+      title: 'Role/Position',
+      organization: 'Organization Name, Location',
+      startDate: 'Month YYYY',
+      endDate: 'Present',
+      bullets: ['Brief description of testing, evaluation, or participation role.'],
+    },
+    {
+      id: 'extra_template_3',
+      title: 'Program/Competition Name',
+      organization: 'Institution Name, Mode',
+      startDate: 'Month YYYY',
+      endDate: 'Month YYYY',
+      bullets: ['Brief description of program outcome, ranking, or skill demonstrated.'],
+    },
+    {
+      id: 'extra_template_4',
+      title: 'Program Name',
+      organization: 'Institution/Organization Name, Mode',
+      startDate: 'Month YYYY',
+      endDate: 'Month YYYY',
+      bullets: ['Brief description of modules completed or skills developed.'],
+    },
+    {
+      id: 'extra_template_5',
+      title: 'Role/Program Name',
+      organization: 'Organization Name, Mode',
+      startDate: 'Month YYYY',
+      endDate: 'Month YYYY',
+      bullets: ['Brief description of what you were selected for and what the program involved.'],
+    },
+    {
+      id: 'extra_template_6',
+      title: 'Role/Position',
+      organization: 'Organization Name, Mode',
+      startDate: 'Month YYYY',
+      endDate: 'Month YYYY',
+      bullets: ['Brief description of regional/community role, outreach efforts, or contribution areas.'],
+    },
+    {
+      id: 'extra_template_7',
+      title: 'Program Name',
+      organization: 'Organization Name, Mode',
+      startDate: 'Month YYYY',
+      endDate: 'Month YYYY',
+      bullets: ['Brief description of professional development completed.'],
+    },
+    {
+      id: 'extra_template_8',
+      title: 'Role/Program Name',
+      organization: 'Organization Name, Mode',
+      startDate: 'Month YYYY',
+      endDate: 'Month YYYY',
+      bullets: ['Brief description of ambassadorship, representation, or campus/community role.'],
+    },
+  ],
+
+  achievements: [
+    { id: 'ach_template_1', text: 'Certified in [Topic/Skill] by [Institution], with demonstrated expertise in [specific area].' },
+    { id: 'ach_template_2', text: 'Achieved [position/rank] in [competition name] at [event/fest], showcasing [skills demonstrated].' },
+    { id: 'ach_template_3', text: 'Secured [position/rank] in [competition name] at [event/fest], demonstrating [skills demonstrated].' },
+  ],
+
+  certifications: [
+    {
+      id: 'cert_template_1',
+      text: 'Passed [Certification Name] Certification.',
+      credentialUrl: 'https://credential-link.com/your-credential-id',
+    },
+  ],
+
+  publications: [
+    {
+      id: 'pub_template_1',
+      title: 'Full Title of Your Research Paper',
+      authors: 'Author One, Author Two',
+      abstractText: 'One to two sentences summarizing the core finding, method, or contribution of the paper.',
+      paperUrl: 'https://arxiv.org/abs/XXXXXXXXXX',
+      paperLinkLabel: 'arXiv Pre-print, YYYY',
+    },
+  ],
+};
+
+export const emptyResumeData: ResumeData = {
+  personal: { name: '', email: '', phone: '', location: '', linkedin: '', github: '', website: '' },
+  education: [],
+  skills: [],
+  projects: [],
+  experience: [],
+  extracurricular: [],
+  achievements: [],
+  certifications: [],
+  publications: [],
+};
+
 export interface SectionConfig {
   id: Exclude<ActiveSection, 'personal'>;
   label: string; // shown in nav AND used as \section*{label} in LaTeX
@@ -419,3 +692,20 @@ export const ALL_SECTIONS: SectionConfig[] = [
   { id: 'certifications',  label: 'Certifications' },
   { id: 'publications',    label: 'Publications' },
 ];
+
+const ADMIN_MASTER_EMAIL = 'itsnits333@gmail.com';
+
+export const cloneResumeData = (data: ResumeData): ResumeData =>
+  JSON.parse(JSON.stringify(data)) as ResumeData;
+
+export const cloneSectionConfig = (config: SectionConfig[]): SectionConfig[] =>
+  JSON.parse(JSON.stringify(config)) as SectionConfig[];
+
+export const getInitialMasterData = (email?: string | null): ResumeData =>
+  cloneResumeData(
+    email?.trim().toLowerCase() === ADMIN_MASTER_EMAIL
+      ? defaultResumeData
+      : templateResumeData
+  );
+
+export const getInitialSectionConfig = (): SectionConfig[] => cloneSectionConfig(ALL_SECTIONS);
