@@ -1,14 +1,28 @@
-"""SQLAlchemy engine, session factory, and DB initialisation."""
+"""SQLAlchemy engine, session factory, and database initialisation.
 
+Startup is self-provisioning and portable across machines:
+1. ``ensure_database_exists()`` creates the target database if it is missing, so
+   pointing at a fresh PostgreSQL server (e.g. your laptop) just works.
+2. Alembic migrations then bring the schema to the latest revision. An existing
+   pre-Alembic database is *adopted* (stamped), never recreated — data is safe.
+"""
+
+import os
 from collections.abc import Generator
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import settings
 
 engine = create_engine(settings.database_url, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+# Absolute path to backend/alembic.ini, resolved from this file so Alembic can be
+# driven programmatically regardless of the current working directory.
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ALEMBIC_INI = os.path.join(_BACKEND_DIR, "alembic.ini")
 
 
 class Base(DeclarativeBase):
@@ -24,12 +38,59 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def ensure_database_exists() -> None:
+    """Create the target database if it does not already exist.
+
+    Connects to the server's ``postgres`` maintenance database and issues
+    ``CREATE DATABASE`` when needed. The configured role must have the CREATEDB
+    privilege (the ``postgres`` superuser does).
+    """
+    url = make_url(settings.database_url)
+    db_name = url.database
+    if not db_name:
+        return
+
+    maintenance = create_engine(
+        url.set(database="postgres"), isolation_level="AUTOCOMMIT", future=True
+    )
+    try:
+        with maintenance.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                {"name": db_name},
+            ).scalar()
+            if not exists:
+                # A database name is an identifier and cannot be a bound
+                # parameter; it comes from trusted config but is quoted anyway.
+                safe_name = '"' + db_name.replace('"', '""') + '"'
+                conn.execute(text(f"CREATE DATABASE {safe_name}"))
+    finally:
+        maintenance.dispose()
+
+
+def _alembic_config():
+    """Build an Alembic Config pointed at backend/alembic.ini."""
+    from alembic.config import Config
+
+    return Config(ALEMBIC_INI)
+
+
 def init_db() -> None:
-    """Enable required extensions and create all tables (idempotent)."""
-    # Import models so they are registered on Base.metadata before create_all.
-    from . import models  # noqa: F401
+    """Ensure the database exists and its schema is at the latest revision.
 
-    with engine.begin() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS citext"))
+    - Fresh server: the database is created, then every migration is applied.
+    - Pre-Alembic database (app tables but no ``alembic_version``): the current
+      schema is adopted as the baseline by stamping ``head`` — no DDL is run.
+    - Already Alembic-managed: any pending migrations are applied.
+    """
+    from alembic import command
 
-    Base.metadata.create_all(bind=engine)
+    ensure_database_exists()
+
+    cfg = _alembic_config()
+    tables = set(inspect(engine).get_table_names())
+
+    if "alembic_version" not in tables and "users" in tables:
+        command.stamp(cfg, "head")
+    else:
+        command.upgrade(cfg, "head")

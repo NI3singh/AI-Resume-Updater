@@ -26,8 +26,10 @@ Each account gets a **master resume** plus as many tailored versions as you like
 │   │   ├── schemas.py        # Pydantic request/response models
 │   │   ├── security.py       # JWT + password hashing
 │   │   ├── deps.py           # current-user dependency
-│   │   ├── database.py       # engine + init_db()
+│   │   ├── database.py       # engine, self-provisioning init_db(), migrations
 │   │   └── template_data.py  # neutral starter resume seeded per user
+│   ├── alembic/              # schema migrations (version history)
+│   ├── alembic.ini
 │   └── requirements.txt
 │
 ├── resume_template.tex       # reference LaTeX template (mirrored by template_data.py)
@@ -65,8 +67,9 @@ pip install -r requirements.txt
 cp .env.example .env          # then fill in DATABASE_URL + JWT_SECRET
 uvicorn app.main:app --reload --port 8000
 ```
-Tables and the `citext` extension are created automatically on startup.
-Interactive API docs: http://127.0.0.1:8000/docs
+On startup the backend **creates the database if it's missing** and applies
+Alembic migrations — so pointing `DATABASE_URL` at a fresh PostgreSQL (e.g. on a
+new machine) just works. Interactive API docs: http://127.0.0.1:8000/docs
 
 ### 2. Frontend
 ```bash

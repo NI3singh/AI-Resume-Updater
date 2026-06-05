@@ -16,6 +16,7 @@ cookie-based JWT session.
 | `users`         | Auth identity: `id`, `email` (CITEXT, unique), `password_hash`     |
 | `user_profiles` | 1:1 with users: `display_name`                                     |
 | `resumes`       | Master + versions per user: `is_master`, `resume_data`/`section_config` (JSONB) |
+| `auth_sessions` | Server-side login sessions: `user_id`, `expires_at`, `created_at`   |
 
 Per-user isolation: every `resumes` row has a CASCADE FK to `users`, every query
 is scoped by `user_id`, and a partial unique index allows exactly one master per
@@ -50,8 +51,41 @@ cp .env.example .env   # then fill in DATABASE_URL + JWT_SECRET
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
-Tables and the `citext` extension are created automatically on startup.
 Interactive docs at http://127.0.0.1:8000/docs.
+
+## Database & migrations
+The backend is **self-provisioning** on startup (`init_db()` in `app/database.py`):
+1. **Creates the database** if it doesn't exist — it connects to the `postgres`
+   maintenance database and runs `CREATE DATABASE`. The role in `DATABASE_URL`
+   needs the CREATEDB privilege and the right to create the `citext` extension
+   (the `postgres` superuser has both).
+2. **Brings the schema to the latest version** with Alembic (`upgrade head`). A
+   database that already has the tables but predates Alembic is **adopted**
+   (stamped), never recreated — existing data is safe.
+
+To **move to another machine**: install PostgreSQL, point `DATABASE_URL` at it,
+and start the backend — the database, the `citext` extension, and all tables are
+created for you automatically.
+
+### Schema versioning (Alembic)
+Migrations live in `alembic/versions/` and are the source of truth for the schema.
+To change it:
+```bash
+# 1. edit the models in app/models.py
+# 2. generate a migration from the model/DB diff
+alembic revision --autogenerate -m "describe the change"
+# 3. review the generated file under alembic/versions/, then apply it
+alembic upgrade head            # restarting the backend also applies pending migrations
+```
+Handy commands (run from `backend/` with the venv active):
+
+| Command                  | What it does                                       |
+|--------------------------|----------------------------------------------------|
+| `alembic current`        | Show the database's current revision               |
+| `alembic history`        | List the migration history                         |
+| `alembic upgrade head`   | Apply all pending migrations                        |
+| `alembic downgrade -1`   | Roll back the most recent migration                |
+| `alembic check`          | Verify the models match the DB (no pending changes)|
 
 ## Environment (`.env`)
 | Var               | Meaning                                              |
