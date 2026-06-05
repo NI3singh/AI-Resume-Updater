@@ -4,18 +4,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Download, FileCode, Eye, Loader2,
   Zap, Copy, Check, Save, LogOut, CloudOff, Cloud,
   Undo2, RotateCcw, AlertTriangle,
 } from 'lucide-react';
-import { ResumeData, SectionConfig, BuilderMode, ActiveSection, ALL_SECTIONS } from '@/lib/types';
+import { ResumeData, SectionConfig, ActiveSection, ALL_SECTIONS } from '@/lib/types';
 import { generateLatex } from '@/lib/latexTemplate';
 import { compileToPDF, downloadBlob, downloadLatex } from '@/lib/pdfCompiler';
 import FormPanel from '@/components/builder/FormPanel';
-import UploadMode from '@/components/builder/UploadMode';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import ResumeSwitcher from '@/components/builder/ResumeSwitcher';
 import { useAuth } from '@/context/AuthContext';
@@ -33,7 +31,6 @@ interface Snapshot {
 
 function BuilderContent() {
   const router       = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading: authLoading, signOut } = useAuth();
   const {
     resumes, activeResume, loading: resumesLoading, saveStatus,
@@ -44,8 +41,6 @@ function BuilderContent() {
     if (!authLoading && !user) router.replace('/login');
   }, [user, authLoading]);
 
-  const initialMode = searchParams.get('mode') === 'upload' ? 'upload' : 'manual';
-  const [mode, setMode]                 = useState<BuilderMode>(initialMode);
   const [activeSection, setActiveSection] = useState<ActiveSection>('personal');
   const [latexCode, setLatexCode]       = useState('');
   const [previewTab, setPreviewTab]     = useState<PreviewTab>('code');
@@ -222,12 +217,6 @@ function BuilderContent() {
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleParsedResume = useCallback((data: ResumeData) => {
-    setResumeData(data); setMode('manual'); setActiveSection('personal');
-    pushHistory({ resumeData: data, sectionConfig });
-    setHasUnsaved(true);
-  }, [pushHistory, sectionConfig]);
-
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (authLoading || resumesLoading || !resumeData) {
     return (
@@ -338,25 +327,6 @@ function BuilderContent() {
             />
           </div>
 
-          <div className="w-px h-4 bg-ink-700/80 flex-shrink-0 hidden md:block" />
-
-          {/* Mode toggle */}
-          <div className="flex items-center bg-ink-800/80 rounded-lg p-0.5 border border-ink-700/60 flex-shrink-0">
-            {(['manual', 'upload'] as BuilderMode[]).map(m => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-200 cursor-pointer ${
-                  mode === m
-                    ? 'bg-gold text-ink-950 font-semibold shadow-sm shadow-gold/20'
-                    : 'text-ivory-muted hover:text-ivory'
-                }`}
-              >
-                <span className="hidden md:inline">{m === 'manual' ? 'Manual' : 'Upload'}</span>
-                <span className="md:hidden">{m === 'manual' ? 'M' : 'U'}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* ── Right cluster ── */}
@@ -465,24 +435,14 @@ function BuilderContent() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left Panel — Form */}
         <div className="w-[400px] flex-shrink-0 border-r border-ink-800/60 overflow-y-auto bg-ink-900/60">
-          <AnimatePresence mode="wait">
-            {mode === 'upload' ? (
-              <motion.div key="upload" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="h-full">
-                <UploadMode onParsed={handleParsedResume} />
-              </motion.div>
-            ) : (
-              <motion.div key="form" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="h-full">
-                <FormPanel
-                  data={resumeData}
-                  onChange={handleDataChange}
-                  activeSection={activeSection}
-                  onSectionChange={setActiveSection}
-                  sectionConfig={sectionConfig}
-                  onSectionConfigChange={handleConfigChange}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <FormPanel
+            data={resumeData}
+            onChange={handleDataChange}
+            activeSection={activeSection}
+            onSectionChange={setActiveSection}
+            sectionConfig={sectionConfig}
+            onSectionConfigChange={handleConfigChange}
+          />
         </div>
 
         {/* Right Panel — Preview */}

@@ -3,19 +3,19 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, FileText, Upload, Cpu, Download, CheckCircle, Zap, ExternalLink } from 'lucide-react';
+import { ArrowRight, FileText, Cpu, Download, CheckCircle, Zap, ExternalLink } from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { useAuth } from '@/context/AuthContext';
 
 const features = [
   { icon: FileText, title: 'Your Template, Your Rules', desc: 'Built around your exact LaTeX template. No generic defaults — it adapts to your structure.' },
-  { icon: Upload, title: 'Upload & Extract', desc: 'Drop your old PDF or DOCX resume. AI extracts every detail and maps it to your template fields.' },
-  { icon: Cpu, title: 'AI-Powered Parsing', desc: 'Claude AI reads your resume and structures the data into perfect JSON, ready to inject.' },
-  { icon: Download, title: 'Compile to PDF', desc: 'One click compiles your filled LaTeX code via LaTeX.online API. Download a pixel-perfect PDF.' },
+  { icon: Cpu, title: 'Live LaTeX Preview', desc: 'Watch the LaTeX source regenerate as you type. Every field maps straight into your template.' },
+  { icon: CheckCircle, title: 'Versions & Drafts', desc: 'Keep a master resume and branch tailored versions. Save, revert, and switch anytime.' },
+  { icon: Download, title: 'Compile to PDF', desc: 'One click compiles your filled LaTeX through an online engine. Download a pixel-perfect PDF.' },
 ];
 
 const steps = [
-  { num: '01', title: 'Choose your mode', desc: 'Fill the form manually, or upload your existing resume to auto-extract everything.' },
+  { num: '01', title: 'Fill your details', desc: 'Enter your info into the template fields — personal, experience, projects, skills, and more.' },
   { num: '02', title: 'Review & Edit', desc: 'See the live LaTeX code update as you type. Tweak any field instantly.' },
   { num: '03', title: 'Compile & Download', desc: 'Hit compile. Your LaTeX is sent to the compilation engine and returns a perfect PDF.' },
 ];
@@ -115,7 +115,7 @@ export default function HomePage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-75" />
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-gold" />
             </span>
-            LaTeX-powered. AI-assisted. Yours.
+            LaTeX-powered. Pixel-perfect. Yours.
           </motion.div>
 
           {/* Title */}
@@ -137,8 +137,8 @@ export default function HomePage() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-ivory/70 text-lg max-w-xl mx-auto mb-10 leading-relaxed"
           >
-            Fill your personal LaTeX resume template — manually or by uploading your old resume.
-            AI extracts everything. One click compiles to PDF.
+            Fill your personal LaTeX resume template field by field, watch the LaTeX
+            update live, and compile to a pixel-perfect PDF in one click.
           </motion.p>
 
           {/* CTAs */}
@@ -149,16 +149,10 @@ export default function HomePage() {
             className="flex items-center justify-center gap-3 flex-wrap"
           >
             {user ? (
-              <>
-                <Link href="/builder" className="btn-primary">
-                  Open Builder
-                  <ArrowRight size={15} />
-                </Link>
-                <Link href="/builder?mode=upload" className="btn-ghost">
-                  <Upload size={14} />
-                  Upload Resume
-                </Link>
-              </>
+              <Link href="/builder" className="btn-primary">
+                Open Builder
+                <ArrowRight size={15} />
+              </Link>
             ) : (
               <>
                 <Link href="/login" className="btn-primary">
@@ -363,7 +357,7 @@ San Francisco, CA
               LaTeX.online
             </a>
             <span className="text-ink-600">·</span>
-            <span>Powered by Claude AI</span>
+            <span>Typeset with LaTeX</span>
           </div>
         </div>
       </footer>

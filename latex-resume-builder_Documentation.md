@@ -1,3 +1,18 @@
+### 📄 c:\Users\ELaunch\OneDrive\nitin-p\latex-resume-builder\.env.local
+*Saved at: 6/5/2026, 12:38:11 PM*
+
+**[REMOVED]**
+```
+(from line ~5)
+BACKEND_ORIGIN=http://127.0.0.1:8000
+```
+**[ADDED]**
+```
+5     BACKEND_ORIGIN=http://127.0.0.1:8000
+```
+
+---
+
 ### 📄 c:\Users\ELaunch\OneDrive\nitin-p\latex-resume-builder\next.config.js
 *Saved at: 6/1/2026, 2:18:42 PM*
 

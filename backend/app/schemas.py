@@ -49,9 +49,5 @@ class ForkIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
 
 
-class ParseIn(BaseModel):
-    text: str = Field(min_length=1)
-
-
 class CompileIn(BaseModel):
     latex: str = Field(min_length=1)

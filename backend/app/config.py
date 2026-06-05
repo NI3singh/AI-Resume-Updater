@@ -18,11 +18,6 @@ class Settings(BaseSettings):
     # Add the Secure flag to the auth cookie (only when served over HTTPS).
     cookie_secure: bool = False
 
-    # Nebius (OpenAI-compatible) endpoint used for AI resume parsing.
-    nebius_api_key: str = ""
-    nebius_base_url: str = "https://api.tokenfactory.us-central1.nebius.com/v1/"
-    nebius_model: str = "deepseek-ai/DeepSeek-V3.2"
-
     # External LaTeX compilation services (primary + fallback).
     latex_compile_url: str = "https://latex.ytotech.com/builds/sync"
     latex_compile_fallback: str = "https://latexonline.cc/compile"
