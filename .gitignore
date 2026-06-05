@@ -1,3 +1,34 @@
-node_modules
+# ─────────────────────────────────────────────────────────────────────
+# Monorepo root .gitignore
+# Package-scoped rules also live in frontend/.gitignore and
+# backend/.gitignore; the patterns here apply repo-wide as a safety net.
+# ─────────────────────────────────────────────────────────────────────
+
+# Dependencies
+node_modules/
+
+# Build output
 .next/
+out/
+dist/
+build/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Environment files (the *.example templates are committed)
+.env
 .env.local
+.env*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
