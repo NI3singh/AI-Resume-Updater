@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { ResumeData, SectionConfig, ActiveSection, ALL_SECTIONS } from '@/lib/types';
 import { generateLatex } from '@/lib/latexTemplate';
-import { compileToPDF, downloadBlob, downloadLatex } from '@/lib/pdfCompiler';
+import { compileToPDF, downloadBlob, downloadLatex, resumeFileBase } from '@/lib/pdfCompiler';
 import FormPanel from '@/components/builder/FormPanel';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import ResumeSwitcher from '@/components/builder/ResumeSwitcher';
@@ -43,7 +43,7 @@ function BuilderContent() {
 
   const [activeSection, setActiveSection] = useState<ActiveSection>('personal');
   const [latexCode, setLatexCode]       = useState('');
-  const [previewTab, setPreviewTab]     = useState<PreviewTab>('code');
+  const [previewTab, setPreviewTab]     = useState<PreviewTab>('preview');
   const [isCompiling, setIsCompiling]   = useState(false);
   const [compileError, setCompileError] = useState('');
   const [copied, setCopied]             = useState(false);
@@ -201,7 +201,7 @@ function BuilderContent() {
   };
 
   const handleDownloadPDF = async () => {
-    const filename = `${resumeData?.personal.name || 'resume'} - ${activeResume?.name || 'resume'}.pdf`;
+    const filename = `${resumeFileBase(resumeData?.personal.name ?? '', activeResume?.name ?? '')}.pdf`;
     if (pdfUrl) {
       const a = document.createElement('a'); a.href = pdfUrl; a.download = filename; a.click();
     } else {
@@ -388,7 +388,7 @@ function BuilderContent() {
 
           {/* Download .tex — icon only below lg */}
           <button
-            onClick={() => downloadLatex(latexCode, `${resumeData.personal.name || 'resume'}.tex`)}
+            onClick={() => downloadLatex(latexCode, `${resumeFileBase(resumeData.personal.name, activeResume?.name ?? '')}.tex`)}
             title="Download LaTeX source"
             className="flex items-center gap-1 px-2 py-1.5 text-xs border border-ink-600/80 text-ivory-muted rounded-lg hover:border-ivory/25 hover:text-ivory transition-all duration-200 cursor-pointer"
           >
@@ -397,16 +397,6 @@ function BuilderContent() {
           </button>
 
           <div className="w-px h-4 bg-ink-700/80 hidden sm:block" />
-
-          {/* Compile */}
-          <button
-            onClick={handleCompile}
-            disabled={isCompiling}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-xs border border-gold/40 text-gold rounded-lg hover:bg-gold/10 hover:border-gold/60 transition-all duration-200 disabled:opacity-50 cursor-pointer"
-          >
-            {isCompiling ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
-            <span className="hidden sm:block">Compile</span>
-          </button>
 
           {/* Download PDF — always labeled (primary CTA) */}
           <button
@@ -489,6 +479,16 @@ function BuilderContent() {
                   {copied ? 'Copied!' : 'Copy'}
                 </button>
               )}
+              {previewTab === 'preview' && pdfUrl && (
+                <button
+                  onClick={handleDownloadPDF}
+                  title="Download PDF"
+                  className="flex items-center gap-1 text-xs text-ivory-dim hover:text-ivory transition-colors cursor-pointer"
+                >
+                  <Download size={12} />
+                  Download
+                </button>
+              )}
             </div>
           </div>
 
@@ -535,7 +535,7 @@ function BuilderContent() {
                 className="flex-1 overflow-hidden flex items-center justify-center bg-ink-900/40"
               >
                 {pdfUrl ? (
-                  <iframe src={pdfUrl} className="w-full h-full border-0" title="PDF Preview" />
+                  <iframe src={`${pdfUrl}#toolbar=0`} className="w-full h-full border-0" title="PDF Preview" />
                 ) : (
                   <div className="text-center px-6">
                     <div className="w-16 h-16 rounded-2xl bg-ink-800 border border-ink-700 flex items-center justify-center mx-auto mb-4 shadow-md">
