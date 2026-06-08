@@ -79,14 +79,14 @@ export default function ProjectsSection({ data, onChange }: Props) {
                         <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Project Name *</label>
                         <input className="input-base" value={proj.name}
                           onChange={e => update(proj.id, { name: e.target.value })}
-                          placeholder="Face Recognition Web Application (Find You)" />
+                          placeholder="Personal Portfolio Website" />
                       </div>
 
                       <div>
                         <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Tech Stack</label>
                         <input className="input-base" value={proj.techStack}
                           onChange={e => update(proj.id, { techStack: e.target.value })}
-                          placeholder="RetinaFace, Facenet" />
+                          placeholder="Next.js, Tailwind CSS" />
                         <p className="text-[9px] font-mono text-ink-500 mt-1">Comma-separated, shown after | in the heading</p>
                       </div>
 
@@ -110,12 +110,13 @@ export default function ProjectsSection({ data, onChange }: Props) {
                           <label className="text-[10px] text-ivory-muted uppercase tracking-wider">Bullet Points</label>
                           <button onClick={() => update(proj.id, { bullets: [...proj.bullets, ''] })} className="text-[10px] text-gold hover:text-gold-light">+ Add</button>
                         </div>
+                        <p className="text-[9px] font-mono text-ink-500 mb-2">Wrap a word in **double asterisks** for bold.</p>
                         <div className="flex flex-col gap-1.5">
                           {proj.bullets.map((b, bi) => (
                             <div key={bi} className="bullet-item">
                               <textarea className="input-base flex-1 min-h-[56px] resize-none text-[11px] leading-relaxed"
                                 value={b} onChange={e => updateBullet(proj.id, bi, e.target.value)}
-                                placeholder="Achieved 96.3% face recognition accuracy on a diverse dataset..." />
+                                placeholder="Built a responsive web app serving 1,000+ monthly users" />
                               {proj.bullets.length > 1 && (
                                 <button onClick={() => update(proj.id, { bullets: proj.bullets.filter((_, i) => i !== bi) })}
                                   className="mt-2 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0"><Trash2 size={11} /></button>

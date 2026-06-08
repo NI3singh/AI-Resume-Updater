@@ -29,6 +29,7 @@ export default function AchievementsSection({ data, onChange }: Props) {
 
       <p className="text-xs text-ivory-muted mb-4 leading-relaxed">
         Each item becomes a bullet point in the Achievements section of your resume.
+        Wrap a word in **double asterisks** for bold.
       </p>
 
       {data.achievements.length === 0 && (
@@ -49,7 +50,7 @@ export default function AchievementsSection({ data, onChange }: Props) {
                 className="input-base flex-1 min-h-[56px] resize-none text-[11px] leading-relaxed"
                 value={item.text}
                 onChange={e => update(item.id, e.target.value)}
-                placeholder={`Achievement ${idx + 1} — e.g. Awarded Certificate of Excellence in Summer Analytics (IIT Guwahati) for finishing in the top 10`}
+                placeholder={`Achievement ${idx + 1} — e.g. Won 1st place at the 2024 University Hackathon`}
               />
               <button onClick={() => remove(item.id)}
                 className="mt-2 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0">

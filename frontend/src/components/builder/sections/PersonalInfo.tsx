@@ -36,6 +36,21 @@ export default function PersonalInfoSection({ data, onChange }: Props) {
         <Field label="Phone" value={data.personal.phone} onChange={(v) => update('phone', v)} placeholder="+1 555 0192" />
       </div>
       <Field label="Location" value={data.personal.location} onChange={(v) => update('location', v)} placeholder="San Francisco, CA" />
+
+      <div className="mb-4">
+        <label className="text-[10px] font-semibold uppercase tracking-wider text-ivory-muted mb-1.5 block">
+          Professional Summary <span className="normal-case font-normal text-ivory-dim">(optional)</span>
+        </label>
+        <textarea
+          value={data.personal.summary ?? ''}
+          onChange={(e) => update('summary', e.target.value)}
+          placeholder="Results-driven software engineer with 3+ years building scalable web apps with **React** and **Node.js**. Focused on clean UI and reliability."
+          rows={4}
+          className="input-base resize-none leading-relaxed"
+        />
+        <p className="text-[10px] text-ivory-muted mt-1 font-mono">Shows as the first section (above Education). Wrap words in **double asterisks** for bold.</p>
+      </div>
+
       <div className="h-px bg-ink-700 my-4" />
       <div className="section-label">Online Presence</div>
       <Field label="LinkedIn Username" value={data.personal.linkedin} onChange={(v) => update('linkedin', v)} placeholder="alexjohnson" hint="linkedin.com/in/alexjohnson" />

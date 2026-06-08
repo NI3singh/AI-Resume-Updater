@@ -73,29 +73,29 @@ export default function PublicationsSection({ data, onChange }: Props) {
                         <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Paper Title *</label>
                         <input className="input-base" value={pub.title}
                           onChange={e => update(pub.id, { title: e.target.value })}
-                          placeholder="Is Architectural Complexity Always the Answer? A Case Study on SwinIR..." />
+                          placeholder="Efficient Deep Learning for Image Restoration: A Comparative Study" />
                       </div>
 
                       <div>
                         <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Authors *</label>
                         <input className="input-base" value={pub.authors}
                           onChange={e => update(pub.id, { authors: e.target.value })}
-                          placeholder="Chandresh Sutariya, Nitin Singh" />
-                        <p className="text-[9px] font-mono text-ink-500 mt-1">Your name will appear as-is — bold it manually in .tex if needed</p>
+                          placeholder="Jane Smith, Alex Johnson" />
+                        <p className="text-[9px] font-mono text-ink-500 mt-1">Wrap your name in **double asterisks** to bold it</p>
                       </div>
 
                       <div>
                         <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Abstract</label>
                         <textarea className="input-base min-h-[72px] resize-none text-[11px] leading-relaxed" value={pub.abstractText}
                           onChange={e => update(pub.id, { abstractText: e.target.value })}
-                          placeholder="Demonstrated that an optimized CNN achieves near state-of-the-art restoration quality..." />
+                          placeholder="A short summary of the paper's key contributions and findings." />
                       </div>
 
                       <div>
                         <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Paper URL</label>
                         <input className="input-base" value={pub.paperUrl}
                           onChange={e => update(pub.id, { paperUrl: e.target.value })}
-                          placeholder="https://arxiv.org/abs/2510.07984" />
+                          placeholder="https://arxiv.org/abs/..." />
                       </div>
 
                       <div>

@@ -13,7 +13,7 @@ import {
 } from './types';
 
 // ---------------------------------------------------------------------------
-// Escape plain text for LaTeX
+// Escape plain text for LaTeX (low-level — only used inside tex() below).
 // ---------------------------------------------------------------------------
 const esc = (str: string): string => {
   if (!str) return '';
@@ -30,11 +30,44 @@ const esc = (str: string): string => {
     .replace(/\^/g, '\\textasciicircum{}');
 };
 
+// ---------------------------------------------------------------------------
+// Render ANY user-entered text: LaTeX-escape everything, but turn **bold**
+// markers into \textbf{...}. This is used for every text field below, so a
+// user can bold a word by wrapping it in **double asterisks** anywhere they
+// type — no raw LaTeX needed. Matching is per-field, so an unclosed ** simply
+// stays literal in that field instead of affecting the rest of the document.
+// (URLs are never passed through here — they stay raw inside \href{...}.)
+// ---------------------------------------------------------------------------
+const tex = (raw: string): string =>
+  (raw || '')
+    .split(/(\*\*[^*]+\*\*)/g)
+    .map(part => {
+      const m = part.match(/^\*\*([^*]+)\*\*$/);
+      return m ? `\\textbf{${esc(m[1])}}` : esc(part);
+    })
+    .join('');
+
+// Compose a grade/score label from the chosen format + the user's value:
+//   CGPA "8.68" -> "CGPA: 8.68"       Percentage "85.4" -> "85.4%"
+//   GPA "3.8/4.0" -> "GPA: 3.8/4.0"   Grade "A+" -> "Grade: A+"
+// An empty/unknown format (custom or legacy data) renders the value as-is.
+export const formatScore = (format: string | undefined, value: string): string => {
+  const v = (value || '').trim();
+  if (!v) return '';
+  switch (format) {
+    case 'CGPA':       return `CGPA: ${v}`;
+    case 'GPA':        return `GPA: ${v}`;
+    case 'Percentage': return v.includes('%') ? v : `${v}%`;
+    case 'Grade':      return `Grade: ${v}`;
+    default:           return v;
+  }
+};
+
 const bulletList = (items: string[]): string => {
   const lines = items.filter(b => b.trim());
   if (!lines.length) return '';
   return `\\begin{itemize}
-${lines.map(b => `    \\item ${esc(b)}`).join('\n')}
+${lines.map(b => `    \\item ${tex(b)}`).join('\n')}
 \\end{itemize}`;
 };
 
@@ -45,32 +78,41 @@ const buildHeader = (p: ResumeData['personal']): string => {
   if (!p.name) return '';
 
   const line2: string[] = [];
-  if (p.phone)    line2.push(esc(p.phone));
-  if (p.location) line2.push(esc(p.location));
+  if (p.phone)    line2.push(tex(p.phone));
+  if (p.location) line2.push(tex(p.location));
 
   const line3: string[] = [];
-  if (p.email)   line3.push(`\\href{mailto:${p.email}}{${esc(p.email)}}`);
+  if (p.email)   line3.push(`\\href{mailto:${p.email}}{${tex(p.email)}}`);
   if (p.linkedin) {
     const display = p.linkedin.replace(/^https?:\/\/(www\.)?/, 'www.');
-    line3.push(`\\href{${p.linkedin}}{${esc(display)}}`);
+    line3.push(`\\href{${p.linkedin}}{${tex(display)}}`);
   }
   if (p.github) {
     const display = p.github.replace(/^https?:\/\/(www\.)?/, 'www.');
-    line3.push(`\\href{${p.github}}{${esc(display)}}`);
+    line3.push(`\\href{${p.github}}{${tex(display)}}`);
   }
   if (p.website) line3.push(`\\href{${p.website}}{Portfolio}`);
 
   return `\\begin{center}
-    {\\huge\\textbf{${esc(p.name.toUpperCase())}}}
-    
+    {\\huge\\textbf{${tex(p.name.toUpperCase())}}}
+
     \\vspace{2pt}
-    
+
     ${line2.join(' \\textbar{} ')}
-    
+
     \\vspace{2pt}
-    
+
     ${line3.join(' \\textbar{} ')}
 \\end{center}`;
+};
+
+// ---------------------------------------------------------------------------
+// PROFESSIONAL SUMMARY — optional; rendered first, above the body sections.
+// ---------------------------------------------------------------------------
+const buildSummary = (summary: string | undefined): string => {
+  const text = (summary ?? '').trim();
+  if (!text) return '';
+  return `\\section*{Professional Summary}\n\n${tex(text)}`;
 };
 
 // ---------------------------------------------------------------------------
@@ -80,65 +122,66 @@ const buildHeader = (p: ResumeData['personal']): string => {
 const buildEducation = (entries: EducationEntry[], label: string): string => {
   if (!entries.length) return '';
   const rows = entries.map(e => {
-    const gpa   = e.gpaLabel ? `\\textbf{${esc(e.gpaLabel)}}` : '';
-    const dates = [e.startDate, e.endDate].filter(Boolean).map(esc).join(' - ');
-    const line1 = `\\textbf{${esc(e.institution)}} \\textbar{} ${esc(e.location)} \\hfill ${gpa}\\\\`;
-    const line2 = `${esc(e.degree)} \\hfill ${dates}${e.highlight ? '\\\\' : ''}`;
-    const line3 = e.highlight ? `\\textit{${esc(e.highlight)}}` : '';
+    const score = formatScore(e.gpaFormat, e.gpaLabel);
+    const gpa   = score ? `\\textbf{${tex(score)}}` : '';
+    const dates = [e.startDate, e.endDate].filter(Boolean).map(tex).join(' - ');
+    const line1 = `\\textbf{${tex(e.institution)}} \\textbar{} ${tex(e.location)} \\hfill ${gpa}\\\\`;
+    const line2 = `${tex(e.degree)} \\hfill ${dates}${e.highlight ? '\\\\' : ''}`;
+    const line3 = e.highlight ? `\\textit{${tex(e.highlight)}}` : '';
     return [line1, line2, line3].filter(Boolean).join('\n');
   });
-  return `\\section*{${esc(label)}}\n\n${rows.join('\n\n\\vspace{5pt}\n\n')}`;
+  return `\\section*{${tex(label)}}\n\n${rows.join('\n\n\\vspace{5pt}\n\n')}`;
 };
 
 const buildSkills = (cats: SkillCategory[], label: string): string => {
   const lines = cats
     .filter(c => c.category && c.items.length)
-    .map(c => `\\skillitem{${esc(c.category)}}${c.items.map(esc).join(', ')}`);
+    .map(c => `\\skillitem{${tex(c.category)}}${c.items.map(tex).join(', ')}`);
   if (!lines.length) return '';
-  return `\\section*{${esc(label)}}\n\n${lines.join('\n\n')}`;
+  return `\\section*{${tex(label)}}\n\n${lines.join('\n\n')}`;
 };
 
 const buildProjects = (projects: ProjectEntry[], label: string): string => {
   if (!projects.length) return '';
   const blocks = projects.map(p => {
-    const techPart = p.techStack ? ` \\textbar{} ${esc(p.techStack)}` : '';
+    const techPart = p.techStack ? ` \\textbar{} ${tex(p.techStack)}` : '';
     const ghLink   = p.githubUrl
       ? ` \\hfill \\href{${p.githubUrl}}{\\textcolor{blue!70!black}{Github Link}}`
       : '';
     const liveLink = p.liveUrl
       ? `\n\\textbar{} {\\href{${p.liveUrl}}{\\textcolor{blue!70!black}{Live Link}}}`
       : '';
-    return `\\textbf{${esc(p.name)}}${techPart}${ghLink}${liveLink}\n${bulletList(p.bullets)}`;
+    return `\\textbf{${tex(p.name)}}${techPart}${ghLink}${liveLink}\n${bulletList(p.bullets)}`;
   });
-  return `\\section*{${esc(label)}}\n\n${blocks.join('\n\n\\vspace{3pt}\n\n')}`;
+  return `\\section*{${tex(label)}}\n\n${blocks.join('\n\n\\vspace{3pt}\n\n')}`;
 };
 
 const buildExperience = (entries: ExperienceEntry[], label: string): string => {
   if (!entries.length) return '';
   const blocks = entries.map(e => {
     const dateRange   = e.current
-      ? `${esc(e.startDate)} - Present`
-      : [e.startDate, e.endDate].filter(Boolean).map(esc).join(' - ');
-    const companyPart = [e.company, e.location].filter(Boolean).map(esc).join(', ');
-    const subtitle    = e.projectSubtitle ? `\\\\\n\\textit{${esc(e.projectSubtitle)}}` : '';
-    return `\\textbf{${esc(e.role)}} \\textbar{} ${companyPart} \\hfill ${dateRange}${subtitle}\n${bulletList(e.bullets)}`;
+      ? `${tex(e.startDate)} - Present`
+      : [e.startDate, e.endDate].filter(Boolean).map(tex).join(' - ');
+    const companyPart = [e.company, e.location].filter(Boolean).map(tex).join(', ');
+    const subtitle    = e.projectSubtitle ? `\\\\\n\\textit{${tex(e.projectSubtitle)}}` : '';
+    return `\\textbf{${tex(e.role)}} \\textbar{} ${companyPart} \\hfill ${dateRange}${subtitle}\n${bulletList(e.bullets)}`;
   });
-  return `\\section*{${esc(label)}}\n\n${blocks.join('\n\n\\vspace{3pt}\n\n')}`;
+  return `\\section*{${tex(label)}}\n\n${blocks.join('\n\n\\vspace{3pt}\n\n')}`;
 };
 
 const buildExtracurricular = (entries: ExtracurricularEntry[], label: string): string => {
   if (!entries.length) return '';
   const blocks = entries.map(e => {
-    const dateRange = [e.startDate, e.endDate].filter(Boolean).map(esc).join(' - ');
-    return `\\textbf{${esc(e.title)}} \\textbar{} ${esc(e.organization)} \\hfill ${dateRange}\n${bulletList(e.bullets)}`;
+    const dateRange = [e.startDate, e.endDate].filter(Boolean).map(tex).join(' - ');
+    return `\\textbf{${tex(e.title)}} \\textbar{} ${tex(e.organization)} \\hfill ${dateRange}\n${bulletList(e.bullets)}`;
   });
-  return `\\section*{${esc(label)}}\n\n${blocks.join('\n\n\\vspace{3pt}\n\n')}`;
+  return `\\section*{${tex(label)}}\n\n${blocks.join('\n\n\\vspace{3pt}\n\n')}`;
 };
 
 const buildAchievements = (items: AchievementItem[], label: string): string => {
   const valid = items.filter(a => a.text.trim());
   if (!valid.length) return '';
-  return `\\section*{${esc(label)}}\n\\begin{itemize}\n${valid.map(a => `    \\item ${esc(a.text)}`).join('\n')}\n\\end{itemize}`;
+  return `\\section*{${tex(label)}}\n\\begin{itemize}\n${valid.map(a => `    \\item ${tex(a.text)}`).join('\n')}\n\\end{itemize}`;
 };
 
 const buildCertifications = (items: CertificationItem[], label: string): string => {
@@ -148,22 +191,22 @@ const buildCertifications = (items: CertificationItem[], label: string): string 
     const link = c.credentialUrl
       ? ` \\href{${c.credentialUrl}}{\\textcolor{blue!70!black}{[View Credential]}}`
       : '';
-    return `    \\item ${esc(c.text)}${link}`;
+    return `    \\item ${tex(c.text)}${link}`;
   });
-  return `\\section*{${esc(label)}}\n\\begin{itemize}\n${lines.join('\n')}\n\\end{itemize}`;
+  return `\\section*{${tex(label)}}\n\\begin{itemize}\n${lines.join('\n')}\n\\end{itemize}`;
 };
 
 const buildPublications = (entries: PublicationEntry[], label: string): string => {
   if (!entries.length) return '';
   const blocks = entries.map(p => {
-    const abstractLine = p.abstractText ? `    \\item \\textbf{Abstract:} ${esc(p.abstractText)}` : '';
+    const abstractLine = p.abstractText ? `    \\item \\textbf{Abstract:} ${tex(p.abstractText)}` : '';
     const linkLine     = p.paperUrl && p.paperLinkLabel
-      ? `    \\item \\href{${p.paperUrl}}{\\textcolor{blue!70!black}{${esc(p.paperLinkLabel)}}}`
+      ? `    \\item \\href{${p.paperUrl}}{\\textcolor{blue!70!black}{${tex(p.paperLinkLabel)}}}`
       : '';
     const itemLines = [abstractLine, linkLine].filter(Boolean).join('\n');
-    return `\\textbf{${esc(p.title)}} \\textbar{} ${esc(p.authors)}\n\\begin{itemize}\n${itemLines}\n\\end{itemize}`;
+    return `\\textbf{${tex(p.title)}} \\textbar{} ${tex(p.authors)}\n\\begin{itemize}\n${itemLines}\n\\end{itemize}`;
   });
-  return `\\section*{${esc(label)}}\n\n${blocks.join('\n\n\\vspace{3pt}\n\n')}`;
+  return `\\section*{${tex(label)}}\n\n${blocks.join('\n\n\\vspace{3pt}\n\n')}`;
 };
 
 // ---------------------------------------------------------------------------
@@ -174,8 +217,9 @@ const buildPublications = (entries: PublicationEntry[], label: string): string =
 export const generateLatex = (data: ResumeData, sectionConfig: SectionConfig[]): string => {
   const header = buildHeader(data.personal);
 
-  const body = sectionConfig
-    .map(({ id, label }) => {
+  const sections = [
+    buildSummary(data.personal.summary),
+    ...sectionConfig.map(({ id, label }) => {
       switch (id) {
         case 'education':       return buildEducation(data.education, label);
         case 'skills':          return buildSkills(data.skills, label);
@@ -187,7 +231,8 @@ export const generateLatex = (data: ResumeData, sectionConfig: SectionConfig[]):
         case 'publications':    return buildPublications(data.publications, label);
         default:                return '';
       }
-    })
+    }),
+  ]
     .filter(Boolean)
     .join('\n\n\\vspace{5pt}\n\n');
 
@@ -236,7 +281,7 @@ ${header}
 
 \\vspace{-12pt}
 
-${body}
+${sections}
 
 \\vspace{3pt}
 

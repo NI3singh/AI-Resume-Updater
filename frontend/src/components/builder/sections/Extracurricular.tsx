@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ResumeData, ExtracurricularEntry } from '@/lib/types';
+import MonthYearPicker from '@/components/builder/MonthYearPicker';
 
 interface Props { data: ResumeData; onChange: (d: ResumeData) => void; }
 
@@ -79,28 +80,28 @@ export default function ExtracurricularSection({ data, onChange }: Props) {
                         <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Title / Role *</label>
                         <input className="input-base" value={entry.title}
                           onChange={e => update(entry.id, { title: e.target.value })}
-                          placeholder="Research Community Member" />
+                          placeholder="Volunteer Mentor" />
                       </div>
 
                       <div>
                         <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Organization *</label>
                         <input className="input-base" value={entry.organization}
                           onChange={e => update(entry.id, { organization: e.target.value })}
-                          placeholder="Swaayan Drone Club, SVNIT, Surat, Gujarat" />
+                          placeholder="Local Coding Club, San Francisco" />
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Start Date</label>
-                          <input className="input-base" value={entry.startDate}
-                            onChange={e => update(entry.id, { startDate: e.target.value })}
-                            placeholder="May 2024" />
+                          <MonthYearPicker value={entry.startDate}
+                            onChange={v => update(entry.id, { startDate: v })}
+                            placeholder="Jan 2021" />
                         </div>
                         <div>
                           <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">End Date</label>
-                          <input className="input-base" value={entry.endDate}
-                            onChange={e => update(entry.id, { endDate: e.target.value })}
-                            placeholder="June 2024 / Present" />
+                          <MonthYearPicker value={entry.endDate}
+                            onChange={v => update(entry.id, { endDate: v })}
+                            placeholder="Dec 2021" allowPresent />
                         </div>
                       </div>
 
@@ -109,12 +110,13 @@ export default function ExtracurricularSection({ data, onChange }: Props) {
                           <label className="text-[10px] text-ivory-muted uppercase tracking-wider">Bullet Points</label>
                           <button onClick={() => update(entry.id, { bullets: [...entry.bullets, ''] })} className="text-[10px] text-gold hover:text-gold-light">+ Add</button>
                         </div>
+                        <p className="text-[9px] font-mono text-ink-500 mb-2">Wrap a word in **double asterisks** for bold.</p>
                         <div className="flex flex-col gap-1.5">
                           {entry.bullets.map((b, bi) => (
                             <div key={bi} className="bullet-item">
                               <textarea className="input-base flex-1 min-h-[48px] resize-none text-[11px] leading-relaxed"
                                 value={b} onChange={e => updateBullet(entry.id, bi, e.target.value)}
-                                placeholder="Built and calibrated drones for bootcamp events..." />
+                                placeholder="Mentored 10+ students in web development fundamentals" />
                               {entry.bullets.length > 1 && (
                                 <button onClick={() => update(entry.id, { bullets: entry.bullets.filter((_, i) => i !== bi) })}
                                   className="mt-2 text-ivory-muted hover:text-crimson flex-shrink-0"><Trash2 size={11} /></button>

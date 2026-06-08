@@ -8,13 +8,15 @@ export interface PersonalInfo {
   linkedin: string;
   github: string;
   website: string;
+  summary?: string;
 }
 
 export interface EducationEntry {
   id: string;
   institution: string;
   location: string;
-  gpaLabel: string;
+  gpaFormat?: string; // 'CGPA' | 'GPA' | 'Percentage' | 'Grade' | '' (custom). Optional for backward compat.
+  gpaLabel: string;   // the score value (e.g. '8.68', '85.4', 'A+'), or a full custom label
   degree: string;
   startDate: string;
   endDate: string;

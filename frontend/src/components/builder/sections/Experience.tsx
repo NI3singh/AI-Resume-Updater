@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ResumeData, ExperienceEntry } from '@/lib/types';
+import MonthYearPicker from '@/components/builder/MonthYearPicker';
 
 interface Props { data: ResumeData; onChange: (d: ResumeData) => void; }
 
@@ -82,13 +83,13 @@ export default function ExperienceSection({ data, onChange }: Props) {
                           <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Job Title *</label>
                           <input className="input-base" value={exp.role}
                             onChange={e => update(exp.id, { role: e.target.value })}
-                            placeholder="AI/ML Engineer" />
+                            placeholder="Software Engineer" />
                         </div>
                         <div>
                           <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Company *</label>
                           <input className="input-base" value={exp.company}
                             onChange={e => update(exp.id, { company: e.target.value })}
-                            placeholder="ELaunch Solution Pvt. Ltd." />
+                            placeholder="Acme Corp" />
                         </div>
                       </div>
 
@@ -96,21 +97,21 @@ export default function ExperienceSection({ data, onChange }: Props) {
                         <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Location</label>
                         <input className="input-base" value={exp.location}
                           onChange={e => update(exp.id, { location: e.target.value })}
-                          placeholder="Surat, Gujarat" />
+                          placeholder="San Francisco, CA" />
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Start Date</label>
-                          <input className="input-base" value={exp.startDate}
-                            onChange={e => update(exp.id, { startDate: e.target.value })}
-                            placeholder="Dec 2024" />
+                          <MonthYearPicker value={exp.startDate}
+                            onChange={v => update(exp.id, { startDate: v })}
+                            placeholder="Jun 2021" />
                         </div>
                         <div>
                           <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">End Date</label>
-                          <input className="input-base" value={exp.endDate}
-                            onChange={e => update(exp.id, { endDate: e.target.value })}
-                            placeholder="May 2025" disabled={exp.current} />
+                          <MonthYearPicker value={exp.current ? 'Present' : exp.endDate}
+                            onChange={v => update(exp.id, { endDate: v })}
+                            placeholder="Aug 2023" disabled={exp.current} />
                         </div>
                       </div>
 
@@ -126,7 +127,7 @@ export default function ExperienceSection({ data, onChange }: Props) {
                         <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Project Subtitle (optional)</label>
                         <input className="input-base" value={exp.projectSubtitle}
                           onChange={e => update(exp.id, { projectSubtitle: e.target.value })}
-                          placeholder="Project: Student Performance Analysis | Python, Numpy" />
+                          placeholder="Project: Analytics Dashboard | React, Node.js" />
                         <p className="text-[9px] font-mono text-ink-500 mt-1">Rendered in italics below the role line</p>
                       </div>
 
@@ -135,6 +136,7 @@ export default function ExperienceSection({ data, onChange }: Props) {
                           <label className="text-[10px] text-ivory-muted uppercase tracking-wider">Bullet Points</label>
                           <button onClick={() => update(exp.id, { bullets: [...exp.bullets, ''] })} className="text-[10px] text-gold hover:text-gold-light">+ Add</button>
                         </div>
+                        <p className="text-[9px] font-mono text-ink-500 mb-2">Wrap a word in **double asterisks** for bold.</p>
                         <div className="flex flex-col gap-1.5">
                           {exp.bullets.map((b, bi) => (
                             <div key={bi} className="bullet-item">

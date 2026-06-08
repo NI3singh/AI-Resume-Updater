@@ -50,7 +50,7 @@ export default function CertificationsSection({ data, onChange }: Props) {
                   <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Certification Text *</label>
                   <input className="input-base text-[11px]" value={item.text}
                     onChange={e => update(item.id, { text: e.target.value })}
-                    placeholder={`e.g. Passed Google Analytics Certification.`} />
+                    placeholder="e.g. AWS Certified Cloud Practitioner" />
                 </div>
                 <button onClick={() => remove(item.id)}
                   className="mt-5 p-1 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0">
@@ -61,7 +61,7 @@ export default function CertificationsSection({ data, onChange }: Props) {
                 <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Credential URL (optional)</label>
                 <input className="input-base text-[11px]" value={item.credentialUrl}
                   onChange={e => update(item.id, { credentialUrl: e.target.value })}
-                  placeholder="https://skillshop.credential.net/..." />
+                  placeholder="https://www.credly.com/badges/..." />
                 <p className="text-[9px] font-mono text-ink-500 mt-1">Leave blank to omit [View Credential] link</p>
               </div>
             </motion.div>

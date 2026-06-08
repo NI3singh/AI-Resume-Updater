@@ -1,12 +1,12 @@
 // src/components/builder/FormPanel.tsx
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Reorder, motion, AnimatePresence } from 'framer-motion';
 import {
   User, Briefcase, GraduationCap, Code2, FolderGit2,
   Trophy, Award, BookOpen, Activity,
-  GripVertical, Pencil, Trash2, Plus, Check, X, RotateCcw,
+  GripVertical, Pencil, Trash2, Plus, Check, X, RotateCcw, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { ResumeData, ActiveSection, SectionConfig, ALL_SECTIONS } from '@/lib/types';
 import PersonalInfoSection    from './sections/PersonalInfo';
@@ -186,6 +186,15 @@ export default function FormPanel({
   sectionConfig, onSectionConfigChange,
 }: FormPanelProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
+
+  // Remember the collapsed/expanded state of the section list across reloads.
+  useEffect(() => { setNavCollapsed(localStorage.getItem('builderNavCollapsed') === '1'); }, []);
+  const toggleNav = () => setNavCollapsed(c => {
+    const next = !c;
+    try { localStorage.setItem('builderNavCollapsed', next ? '1' : '0'); } catch {}
+    return next;
+  });
 
   // Sections not currently in config (available to re-add)
   const removedSections = ALL_SECTIONS.filter(
@@ -216,6 +225,8 @@ export default function FormPanel({
     <div className="flex flex-col h-full">
       {/* Section Nav */}
       <div className="px-3 pt-4 pb-0 flex-shrink-0">
+        {!navCollapsed && (
+          <>
         <div className="section-label mb-2">Sections</div>
 
         {/* Personal — fixed, not reorderable */}
@@ -313,6 +324,19 @@ export default function FormPanel({
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+          </>
+        )}
+
+        {/* Collapse / expand the section list — centered toggle below the list */}
+        <div className="flex justify-center pt-1.5">
+          <button
+            onClick={toggleNav}
+            title={navCollapsed ? 'Expand sections' : 'Collapse sections'}
+            className="flex items-center justify-center w-7 h-6 rounded-md text-ivory-dim hover:text-ivory hover:bg-ink-700/50 transition-colors cursor-pointer"
+          >
+            {navCollapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+          </button>
         </div>
 
         <div className="section-divider mt-3 mb-0" />

@@ -1,7 +1,7 @@
 // src/app/builder/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type MouseEvent as ReactMouseEvent } from 'react';
 import { Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,6 +22,10 @@ import { useResumes } from '@/hooks/useResumes';
 type PreviewTab = 'code' | 'preview';
 
 const MAX_HISTORY = 50;
+
+// Form panel resize bounds (px).
+const MIN_FORM_W = 320;
+const DEFAULT_FORM_W = 400;
 
 // ── Snapshot stored in undo history ─────────────────────────────────────────
 interface Snapshot {
@@ -51,6 +55,49 @@ function BuilderContent() {
 
   const [resumeData, setResumeData]       = useState<ResumeData | null>(null);
   const [sectionConfig, setSectionConfig] = useState<SectionConfig[]>(ALL_SECTIONS);
+
+  // ── Resizable form panel (drag the divider on its right edge) ───────────────
+  const [formWidth, setFormWidth]   = useState(DEFAULT_FORM_W);
+  const [isResizing, setIsResizing] = useState(false);
+  const formWidthRef = useRef(DEFAULT_FORM_W);
+  const mainRef = useRef<HTMLDivElement>(null);
+
+  const applyFormWidth = useCallback((w: number) => {
+    const max = Math.max(MIN_FORM_W, Math.min(window.innerWidth * 0.6, window.innerWidth - 380));
+    const clamped = Math.round(Math.min(Math.max(w, MIN_FORM_W), max));
+    formWidthRef.current = clamped;
+    setFormWidth(clamped);
+  }, []);
+
+  // Restore the saved width on mount.
+  useEffect(() => {
+    const saved = Number(localStorage.getItem('builderFormWidth'));
+    if (saved && saved >= MIN_FORM_W) applyFormWidth(saved);
+  }, [applyFormWidth]);
+
+  const startFormResize = (e: ReactMouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    const onMove = (ev: MouseEvent) => {
+      const left = mainRef.current?.getBoundingClientRect().left ?? 0;
+      applyFormWidth(ev.clientX - left);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+      setIsResizing(false);
+      try { localStorage.setItem('builderFormWidth', String(formWidthRef.current)); } catch {}
+    };
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  const resetFormWidth = () => {
+    applyFormWidth(DEFAULT_FORM_W);
+    try { localStorage.setItem('builderFormWidth', String(DEFAULT_FORM_W)); } catch {}
+  };
 
   // ── Undo history ────────────────────────────────────────────────────────────
   const undoStack  = useRef<Snapshot[]>([]);
@@ -172,7 +219,13 @@ function BuilderContent() {
   const doSave = useCallback(() => {
     if (activeResume && resumeData) {
       save(activeResume.id, resumeData, sectionConfig);
-      lastSaved.current = { resumeData, sectionConfig };
+      // Saving commits the current state as the new baseline — like load/revert,
+      // reset the undo history so you can't step back past a save.
+      const snap: Snapshot = { resumeData, sectionConfig };
+      lastSaved.current = snap;
+      undoStack.current = [snap];
+      undoIndex.current = 0;
+      setUndoCount(0);
       setHasUnsaved(false);
     }
   }, [activeResume, resumeData, sectionConfig, save]);
@@ -422,9 +475,9 @@ function BuilderContent() {
       </header>
 
       {/* ── Main ──────────────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Panel — Form */}
-        <div className="w-[400px] flex-shrink-0 border-r border-ink-800/60 overflow-y-auto bg-ink-900/60">
+      <div ref={mainRef} className="flex flex-1 overflow-hidden">
+        {/* Left Panel — Form (resizable: drag the divider on its right edge) */}
+        <div style={{ width: formWidth }} className="flex-shrink-0 overflow-y-auto bg-ink-900/60">
           <FormPanel
             data={resumeData}
             onChange={handleDataChange}
@@ -435,8 +488,19 @@ function BuilderContent() {
           />
         </div>
 
+        {/* Resize handle — full-height; drag to widen/narrow the form, double-click to reset */}
+        <div
+          onMouseDown={startFormResize}
+          onDoubleClick={resetFormWidth}
+          title="Drag to resize · double-click to reset"
+          className="w-2 flex-shrink-0 cursor-col-resize bg-ink-800/70 hover:bg-gold/40 active:bg-gold/60 transition-colors"
+        />
+
+        {/* While dragging: full-screen overlay so the PDF iframe can't swallow mouse events */}
+        {isResizing && <div className="fixed inset-0 z-[250] cursor-col-resize" />}
+
         {/* Right Panel — Preview */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-ink-950">
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-ink-950">
           {/* Preview tab bar */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-ink-800/60 bg-ink-900/40 flex-shrink-0">
             <div className="flex items-center gap-1 bg-ink-800/60 rounded-lg p-0.5 border border-ink-700/50">
