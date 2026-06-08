@@ -5,10 +5,10 @@ import { useState, useRef, useEffect } from 'react';
 import { Reorder, motion, AnimatePresence } from 'framer-motion';
 import {
   User, Briefcase, GraduationCap, Code2, FolderGit2,
-  Trophy, Award, BookOpen, Activity,
+  Trophy, Award, BookOpen, Activity, Shapes,
   GripVertical, Pencil, Trash2, Plus, Check, X, RotateCcw, ChevronUp, ChevronDown,
 } from 'lucide-react';
-import { ResumeData, ActiveSection, SectionConfig, ALL_SECTIONS } from '@/lib/types';
+import { ResumeData, ActiveSection, SectionConfig, ALL_SECTIONS, CustomFieldDef } from '@/lib/types';
 import PersonalInfoSection    from './sections/PersonalInfo';
 import EducationSection       from './sections/Education';
 import SkillsSection          from './sections/Skills';
@@ -18,6 +18,8 @@ import ExtracurricularSection from './sections/Extracurricular';
 import AchievementsSection    from './sections/Achievements';
 import CertificationsSection  from './sections/Certifications';
 import PublicationsSection    from './sections/Publications';
+import CustomSectionEditor    from './sections/CustomSectionEditor';
+import SectionConfigModal     from './SectionConfigModal';
 
 interface FormPanelProps {
   data: ResumeData;
@@ -41,6 +43,10 @@ const SECTION_ICONS: Record<string, React.ElementType> = {
 };
 
 const getCompleteness = (data: ResumeData, id: ActiveSection): number => {
+  if (id.startsWith('custom_')) {
+    const cs = data.custom?.find(c => c.id === id);
+    return cs && cs.entries.length > 0 ? 100 : 0;
+  }
   switch (id) {
     case 'personal':       return Math.round((Object.values(data.personal).filter(Boolean).length / 7) * 100);
     case 'education':      return data.education.length > 0 ? 100 : 0;
@@ -70,7 +76,7 @@ function SectionRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(section.label);
   const inputRef = useRef<HTMLInputElement>(null);
-  const Icon = SECTION_ICONS[section.id] || Code2;
+  const Icon = SECTION_ICONS[section.id] || Shapes;
   const pct  = getCompleteness(data, section.id);
 
   const startEdit = (e: React.MouseEvent) => {
@@ -203,6 +209,10 @@ export default function FormPanel({
 
   const handleDelete = (id: SectionConfig['id']) => {
     onSectionConfigChange(sectionConfig.filter(s => s.id !== id));
+    // Custom sections also own their data — remove it too.
+    if (id.startsWith('custom_')) {
+      onChange({ ...data, custom: (data.custom ?? []).filter(c => c.id !== id) });
+    }
     // If the deleted section was active, fall back to personal
     if (activeSection === id) onSectionChange('personal');
   };
@@ -221,13 +231,40 @@ export default function FormPanel({
     setShowAddMenu(false);
   };
 
+  // Section configuration modal — create a new custom section, or edit an
+  // existing one's name + fields. Changes are applied only on Save.
+  const [configModal, setConfigModal] = useState<{ mode: 'new' } | { mode: 'edit'; sectionId: string } | null>(null);
+
+  const saveConfig = (label: string, fields: CustomFieldDef[]) => {
+    if (configModal?.mode === 'new') {
+      const id = `custom_${Date.now()}`;
+      onChange({ ...data, custom: [...(data.custom ?? []), { id, fields, entries: [] }] });
+      onSectionConfigChange([...sectionConfig, { id, label }]);
+      onSectionChange(id);
+    } else if (configModal?.mode === 'edit') {
+      const id = configModal.sectionId;
+      onChange({ ...data, custom: (data.custom ?? []).map(c => c.id === id ? { ...c, fields } : c) });
+      onSectionConfigChange(sectionConfig.map(s => s.id === id ? { ...s, label } : s));
+    }
+    setConfigModal(null);
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Section Nav */}
       <div className="px-3 pt-4 pb-0 flex-shrink-0">
         {!navCollapsed && (
           <>
-        <div className="section-label mb-2">Sections</div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="section-label mb-0">Sections</div>
+          <button
+            onClick={() => setConfigModal({ mode: 'new' })}
+            title="Add a custom section"
+            className="flex items-center gap-1 text-[10px] font-medium text-gold hover:text-gold-light transition-colors cursor-pointer"
+          >
+            <Plus size={11} /> New Section
+          </button>
+        </div>
 
         {/* Personal — fixed, not reorderable */}
         <button
@@ -361,9 +398,20 @@ export default function FormPanel({
             {activeSection === 'achievements'    && <AchievementsSection    data={data} onChange={onChange} />}
             {activeSection === 'certifications'  && <CertificationsSection  data={data} onChange={onChange} />}
             {activeSection === 'publications'    && <PublicationsSection    data={data} onChange={onChange} />}
+            {activeSection.startsWith('custom_') && <CustomSectionEditor    data={data} onChange={onChange} sectionId={activeSection} onConfigure={() => setConfigModal({ mode: 'edit', sectionId: activeSection })} />}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {configModal && (
+        <SectionConfigModal
+          mode={configModal.mode}
+          initialLabel={configModal.mode === 'edit' ? (sectionConfig.find(s => s.id === configModal.sectionId)?.label ?? '') : ''}
+          initialFields={configModal.mode === 'edit' ? (data.custom?.find(c => c.id === configModal.sectionId)?.fields ?? []) : []}
+          onSave={saveConfig}
+          onClose={() => setConfigModal(null)}
+        />
+      )}
     </div>
   );
 }

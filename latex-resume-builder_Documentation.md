@@ -1,3 +1,42 @@
+### 📄 c:\Users\ELaunch\OneDrive\nitin-p\latex-resume-builder\.git\COMMIT_EDITMSG
+*Saved at: 6/8/2026, 1:48:19 PM*
+
+**[ADDED]**
+```
+1     feat(builder): editor UX â date picker, summary, rich-text bold, flexible grades, resizable & collapsible panel
+```
+**[ADDED]**
+```
+3     Form Panel
+4     - Dates: replace free-text start/end fields with a month/year calendar
+5       picker (Education, Experience, Extracurricular). Outputs the "MMM YYYY"
+6       format the LaTeX expects; end dates offer a "Present" option. Portal-based
+7       so it isn't clipped by the entry cards.
+8     - Professional Summary: new optional field (Personal Info) that renders as
+9       the first section, above Education.
+10    - Rich-text bold: wrap any word in **double asterisks** to get \textbf{...}
+11      in every text field; all other LaTeX special chars stay escaped.
+12    - Placeholders: replace real-resume sample data with neutral generic
+13      examples across all sections, so empty fields no longer show personal info.
+14    - Flexible grade/score: CGPA / GPA / Percentage / Grade / Custom selector +
+15      value, composed into the label (CGPA 8.68 -> "CGPA: 8.68",
+16      Percentage 85.4 -> "85.4%"). Backward-compatible via optional gpaFormat.
+17    - Resizable: drag the divider on the panel's right edge to set width
+18      (min 320px, clamped, persisted to localStorage, double-click to reset;
+19      full-screen overlay during drag so the PDF iframe doesn't eat mouse events).
+20    - Collapsible Section Nav: centered toggle below the section list hides/shows
+21      it to free vertical space for the fields (state persisted).
+22    
+23    Fixes
+24    - Undo/Save consistency: Save now resets the undo baseline like load/revert,
+25      so you can no longer undo past a save.
+26    
+27    Backend
+28    - Seed template uses the structured grade format (gpaFormat: "CGPA").
+```
+
+---
+
 ### 📄 c:\Users\ELaunch\OneDrive\nitin-p\latex-resume-builder\frontend\.env.local
 *Saved at: 6/8/2026, 10:32:54 AM*
 

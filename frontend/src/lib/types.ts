@@ -79,6 +79,43 @@ export interface PublicationEntry {
   paperLinkLabel: string;
 }
 
+// ── Custom (user-defined) sections ──────────────────────────────────────────
+export type CustomFieldType = 'text' | 'bullets' | 'date' | 'number' | 'link';
+
+export interface CustomFieldDef {
+  id: string;
+  label: string;
+  type: CustomFieldType;
+  dateRange?: boolean; // only for type 'date': true = start–end range, else single date
+}
+
+export interface LinkValue {
+  url: string;
+  text: string; // the clickable label shown in the resume
+}
+
+export interface DateRangeValue {
+  from: string;
+  to: string;
+}
+
+export interface MarkValue {
+  format: string; // 'CGPA' | 'GPA' | 'Percentage' | 'Grade' | '' (custom)
+  value: string;  // the marks obtained
+  outOf: string;  // denominator, e.g. '10', '4.0', '500' (optional)
+}
+
+export interface CustomEntry {
+  id: string;
+  values: Record<string, string | string[] | LinkValue | DateRangeValue | MarkValue>; // fieldId -> value
+}
+
+export interface CustomSection {
+  id: string;          // 'custom_…' — matches its id in sectionConfig
+  fields: CustomFieldDef[];
+  entries: CustomEntry[];
+}
+
 export interface ResumeData {
   personal: PersonalInfo;
   education: EducationEntry[];
@@ -89,9 +126,10 @@ export interface ResumeData {
   achievements: AchievementItem[];
   certifications: CertificationItem[];
   publications: PublicationEntry[];
+  custom?: CustomSection[];
 }
 
-export type ActiveSection =
+export type BuiltinSection =
   | 'personal'
   | 'education'
   | 'skills'
@@ -102,8 +140,12 @@ export type ActiveSection =
   | 'certifications'
   | 'publications';
 
+// A section id is a builtin id or a custom section id ('custom_…').
+// (string & {}) keeps builtin autocomplete while still allowing any custom id.
+export type ActiveSection = BuiltinSection | (string & {});
+
 export interface SectionConfig {
-  id: Exclude<ActiveSection, 'personal'>;
+  id: string;    // builtin id (minus 'personal') or a custom section id ('custom_…')
   label: string; // shown in nav AND used as \section*{label} in LaTeX
 }
 

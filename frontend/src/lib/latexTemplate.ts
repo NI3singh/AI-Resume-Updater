@@ -10,6 +10,7 @@ import {
   AchievementItem,
   CertificationItem,
   PublicationEntry,
+  CustomSection,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +61,22 @@ export const formatScore = (format: string | undefined, value: string): string =
     case 'Percentage': return v.includes('%') ? v : `${v}%`;
     case 'Grade':      return `Grade: ${v}`;
     default:           return v;
+  }
+};
+
+// Like formatScore, but for the custom "Number / Marks" field — also supports an
+// "out of" denominator. CGPA "8.68" /10 -> "CGPA: 8.68 / 10"; Percentage -> "85.4%".
+export const formatMark = (format: string | undefined, value: string, outOf?: string): string => {
+  const v = (value || '').trim();
+  if (!v) return '';
+  const o = (outOf || '').trim();
+  const denom = o ? ` / ${o}` : '';
+  switch (format) {
+    case 'Percentage': return v.includes('%') ? v : `${v}%`;
+    case 'Grade':      return `Grade: ${v}`;
+    case 'CGPA':       return `CGPA: ${v}${denom}`;
+    case 'GPA':        return `GPA: ${v}${denom}`;
+    default:           return `${v}${denom}`;
   }
 };
 
@@ -210,6 +227,63 @@ const buildPublications = (entries: PublicationEntry[], label: string): string =
 };
 
 // ---------------------------------------------------------------------------
+// CUSTOM SECTIONS — user-defined sections with arbitrary fields.
+// Inline fields (text/number/link) form the header line (first text value
+// bold), date fields are right-aligned, and 'bullets' fields render as lists.
+// ---------------------------------------------------------------------------
+const buildCustomSection = (section: CustomSection, label: string): string => {
+  const inline       = section.fields.filter(f => f.type !== 'bullets' && f.type !== 'date');
+  const dates        = section.fields.filter(f => f.type === 'date');
+  const bulletFields = section.fields.filter(f => f.type === 'bullets');
+
+  const blocks = section.entries.map(entry => {
+    let boldUsed = false;
+    const left = inline.map(f => {
+      if (f.type === 'link') {
+        const lv = entry.values[f.id];
+        let url = '', text = '';
+        if (typeof lv === 'string') url = lv;                                  // legacy: url only
+        else if (lv && typeof lv === 'object' && !Array.isArray(lv) && 'url' in lv) { url = lv.url ?? ''; text = lv.text ?? ''; }
+        if (!url.trim()) return '';
+        return `\\href{${url.trim()}}{${tex(text.trim() || f.label || 'Link')}}`;
+      }
+      if (f.type === 'number') {
+        const mv = entry.values[f.id];
+        let s = '';
+        if (typeof mv === 'string') s = mv;                                                  // legacy: plain number
+        else if (mv && typeof mv === 'object' && !Array.isArray(mv) && 'format' in mv) s = formatMark(mv.format, mv.value, mv.outOf);
+        return s.trim() ? tex(s.trim()) : '';                                                 // never bold (it's a score, not a title)
+      }
+      const v = String(entry.values[f.id] ?? '').trim();
+      if (!v) return '';
+      if (!boldUsed) { boldUsed = true; return `\\textbf{${tex(v)}}`; }
+      return tex(v);
+    }).filter(Boolean).join(' \\textbar{} ');
+
+    const right = dates.map(f => {
+      const dv = entry.values[f.id];
+      let s = '';
+      if (typeof dv === 'string') s = dv;                                          // single date
+      else if (dv && typeof dv === 'object' && !Array.isArray(dv) && 'from' in dv) // range
+        s = [dv.from, dv.to].map(x => (x || '').trim()).filter(Boolean).join(' - ');
+      return tex(s.trim());
+    }).filter(Boolean).join(', ');
+
+    const header = [left, right].filter(Boolean).join(' \\hfill ');
+
+    const bullets = bulletFields
+      .map(f => bulletList(Array.isArray(entry.values[f.id]) ? (entry.values[f.id] as string[]) : []))
+      .filter(Boolean)
+      .join('\n');
+
+    return [header, bullets].filter(Boolean).join('\n');
+  }).filter(Boolean);
+
+  if (!blocks.length) return '';
+  return `\\section*{${tex(label)}}\n\n${blocks.join('\n\n\\vspace{3pt}\n\n')}`;
+};
+
+// ---------------------------------------------------------------------------
 // MAIN EXPORT
 // sectionConfig drives order AND label of every body section.
 // Removing a section from config = it disappears from LaTeX output entirely.
@@ -229,7 +303,10 @@ export const generateLatex = (data: ResumeData, sectionConfig: SectionConfig[]):
         case 'achievements':    return buildAchievements(data.achievements, label);
         case 'certifications':  return buildCertifications(data.certifications, label);
         case 'publications':    return buildPublications(data.publications, label);
-        default:                return '';
+        default: {
+          const cs = data.custom?.find(c => c.id === id);
+          return cs ? buildCustomSection(cs, label) : '';
+        }
       }
     }),
   ]
