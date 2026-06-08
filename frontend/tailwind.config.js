@@ -31,6 +31,7 @@ module.exports = {
       },
       fontFamily: {
         display: ['var(--font-jakarta)', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-fraunces)', 'Georgia', 'serif'],
         body: ['var(--font-dm-sans)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-jetbrains)', 'monospace'],
       },

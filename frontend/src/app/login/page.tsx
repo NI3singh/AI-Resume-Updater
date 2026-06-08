@@ -3,12 +3,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError } from '@/lib/api';
 import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
 
+const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
 export default function LoginPage() {
-  const router   = useRouter();
+  const router = useRouter();
   const { user, loading, signIn, signUp } = useAuth();
 
   const [mode, setMode]             = useState<'login' | 'signup'>('login');
@@ -36,7 +39,6 @@ export default function LoginPage() {
       router.replace('/');
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        // Account already exists — nudge the user to log in instead.
         setError('An account with this email already exists. Please log in instead.');
         setMode('login');
       } else if (err instanceof ApiError) {
@@ -56,30 +58,43 @@ export default function LoginPage() {
   );
 
   return (
-    <div className="h-screen bg-ink-950 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background orbs */}
+    <div className="min-h-screen bg-ink-950 flex items-center justify-center p-4 relative overflow-hidden selection:bg-gold/25 selection:text-ivory">
+      {/* Atmosphere: gradient mesh + orbs + grid + giant lambda */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="orb w-[500px] h-[500px] bg-gold/[0.06] -top-24 -left-32" />
-        <div className="orb w-[400px] h-[400px] bg-jade/[0.045] -bottom-20 -right-24" />
-        {/* Subtle grid */}
-        <div className="absolute inset-0 opacity-[0.02]" style={{
-          backgroundImage: 'linear-gradient(#C9A84C 1px, transparent 1px), linear-gradient(90deg, #C9A84C 1px, transparent 1px)',
-          backgroundSize: '80px 80px',
+        <div className="orb w-[520px] h-[520px] bg-gold/[0.07] -top-28 -left-32" />
+        <div className="orb w-[420px] h-[420px] bg-jade/[0.045] -bottom-24 -right-28" />
+        <div className="absolute inset-0" style={{
+          background: 'radial-gradient(50% 50% at 50% 45%, rgba(201,168,76,0.07), transparent 70%)',
         }} />
+        <div className="absolute inset-0 opacity-[0.025]" style={{
+          backgroundImage: 'linear-gradient(#C9A84C 1px, transparent 1px), linear-gradient(90deg, #C9A84C 1px, transparent 1px)',
+          backgroundSize: '72px 72px',
+          maskImage: 'radial-gradient(ellipse 60% 55% at 50% 45%, black, transparent 75%)',
+          WebkitMaskImage: 'radial-gradient(ellipse 60% 55% at 50% 45%, black, transparent 75%)',
+        }} />
+        <span className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 font-serif italic text-gold/[0.04] leading-none select-none" style={{ fontSize: '24rem' }}>λ</span>
       </div>
 
-      <div className="relative z-10 w-full max-w-sm">
+      <motion.div
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: EASE }}
+        className="relative z-10 w-full max-w-sm"
+      >
         {/* Logo + heading */}
         <div className="text-center mb-8">
-          {/* Logo mark with glow ring */}
           <div className="relative inline-flex items-center justify-center mb-5">
-            <div className="absolute w-16 h-16 rounded-full bg-gold/10 blur-xl" />
+            <div className="absolute w-16 h-16 rounded-full bg-gold/12 blur-xl" />
             <div className="relative w-14 h-14 rounded-2xl border border-gold/35 bg-gold/[0.08] flex items-center justify-center shadow-lg shadow-gold/10">
               <span className="text-gold text-2xl font-mono font-bold">λ</span>
             </div>
           </div>
-          <h1 className="font-display text-2xl font-bold text-ivory tracking-tight">ResumeTeX Builder</h1>
-          <p className="text-ivory/50 text-sm mt-1.5">Craft your perfect LaTeX resume</p>
+          <h1 className="font-serif text-3xl font-semibold text-ivory tracking-tight text-balance">
+            {mode === 'login' ? 'Welcome back.' : 'Create your account.'}
+          </h1>
+          <p className="text-ivory/50 text-sm mt-2">
+            {mode === 'login' ? 'Log in to keep building your resume.' : 'Start crafting your perfectly typeset resume.'}
+          </p>
         </div>
 
         {/* Card */}
@@ -168,11 +183,7 @@ export default function LoginPage() {
             )}
 
             {/* Submit */}
-            <button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="btn-primary w-full mt-1"
-            >
+            <button onClick={handleSubmit} disabled={submitting} className="btn-primary w-full mt-1">
               {submitting && <Loader2 size={14} className="animate-spin" />}
               {mode === 'login' ? 'Log In' : 'Create Account'}
               {!submitting && <ArrowRight size={14} />}
@@ -204,11 +215,21 @@ export default function LoginPage() {
         </div>
 
         {/* Security note */}
-        <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-500 mt-5">
+        <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-500 mt-6">
           <ShieldCheck size={11} className="text-jade/60" />
-          Your resumes are stored securely in the cloud.
+          Your resumes are stored securely on your own database.
         </p>
-      </div>
+
+        {/* Back to home */}
+        <p className="text-center mt-3">
+          <button
+            onClick={() => router.push('/')}
+            className="text-[11px] text-ivory-dim hover:text-ivory-muted transition-colors cursor-pointer"
+          >
+            ← Back to home
+          </button>
+        </p>
+      </motion.div>
     </div>
   );
 }

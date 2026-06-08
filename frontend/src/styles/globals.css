@@ -1,5 +1,5 @@
 /* src/styles/globals.css */
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -15,6 +15,7 @@
   --font-jakarta: 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-dm-sans: 'DM Sans', system-ui, sans-serif;
   --font-jetbrains: 'JetBrains Mono', monospace;
+  --font-fraunces: 'Fraunces', Georgia, 'Times New Roman', serif;
 
   --ink-950: #08080A;
   --ink-900: #0E0E12;
@@ -165,6 +166,34 @@ button:not([class*="text-"]) svg {
   from { background-position: -200% center; }
   to { background-position: 200% center; }
 }
+
+/* =============================================
+   ELEVATED UTILITIES (Ink & Gold, evolved)
+   ============================================= */
+
+/* Fraunces display headlines — high-contrast serif with optical sizing */
+.font-serif { font-optical-sizing: auto; }
+
+/* Balance multi-line headlines so the ragging looks intentional */
+.text-balance { text-wrap: balance; }
+
+/* Soft gold radial glow behind focal points */
+.glow-gold {
+  background: radial-gradient(ellipse at center, rgba(201,168,76,0.14), transparent 70%);
+}
+
+/* Hairline gold rule */
+.rule-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,168,76,0.5), transparent);
+}
+
+/* Gentle float for decorative accents */
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+.animate-floaty { animation: floaty 7s ease-in-out infinite; }
 
 /* =============================================
    COMPONENT UTILITIES
