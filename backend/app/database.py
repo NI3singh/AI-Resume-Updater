@@ -39,33 +39,39 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def ensure_database_exists() -> None:
-    """Create the target database if it does not already exist.
+    """Create the target database if it does not already exist (best-effort).
 
-    Connects to the server's ``postgres`` maintenance database and issues
-    ``CREATE DATABASE`` when needed. The configured role must have the CREATEDB
-    privilege (the ``postgres`` superuser does).
+    On a fresh local PostgreSQL this connects to the ``postgres`` maintenance
+    database and issues ``CREATE DATABASE`` so things "just work". On managed
+    Postgres (e.g. Render) the database already exists and the role usually can't
+    reach ``postgres`` or create databases — in that case this is a safe no-op
+    and the migrations run against the existing database next.
     """
     url = make_url(settings.database_url)
     db_name = url.database
     if not db_name:
         return
 
-    maintenance = create_engine(
-        url.set(database="postgres"), isolation_level="AUTOCOMMIT", future=True
-    )
     try:
-        with maintenance.connect() as conn:
-            exists = conn.execute(
-                text("SELECT 1 FROM pg_database WHERE datname = :name"),
-                {"name": db_name},
-            ).scalar()
-            if not exists:
-                # A database name is an identifier and cannot be a bound
-                # parameter; it comes from trusted config but is quoted anyway.
-                safe_name = '"' + db_name.replace('"', '""') + '"'
-                conn.execute(text(f"CREATE DATABASE {safe_name}"))
-    finally:
-        maintenance.dispose()
+        maintenance = create_engine(
+            url.set(database="postgres"), isolation_level="AUTOCOMMIT", future=True
+        )
+        try:
+            with maintenance.connect() as conn:
+                exists = conn.execute(
+                    text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                    {"name": db_name},
+                ).scalar()
+                if not exists:
+                    # A database name is an identifier and cannot be a bound
+                    # parameter; it comes from trusted config but is quoted anyway.
+                    safe_name = '"' + db_name.replace('"', '""') + '"'
+                    conn.execute(text(f"CREATE DATABASE {safe_name}"))
+        finally:
+            maintenance.dispose()
+    except Exception:
+        # Managed Postgres: DB already exists / 'postgres' not reachable — skip.
+        pass
 
 
 def _alembic_config():
