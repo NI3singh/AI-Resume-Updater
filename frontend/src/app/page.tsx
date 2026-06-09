@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, FileText, Cpu, Download, GitBranch, Zap, ExternalLink, Sparkles } from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import AmbientGlyphs from '@/components/ui/AmbientGlyphs';
 import { useAuth } from '@/context/AuthContext';
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -31,6 +32,10 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-ink-950 overflow-x-hidden selection:bg-gold/25 selection:text-ivory">
+      {/* Ambient drifting golden LaTeX glyphs (behind everything, click-through) */}
+      <AmbientGlyphs />
+
+      <div className="relative z-10">
 
       {/* ── Floating Navbar ───────────────────────────────────────────────── */}
       <nav className="fixed top-4 left-4 right-4 z-50 flex items-center justify-between pl-4 pr-3 py-2.5 rounded-2xl border border-ink-700/60 backdrop-blur-xl bg-ink-900/70 shadow-xl shadow-black/40">
@@ -356,6 +361,7 @@ San Francisco, CA
           </div>
         </div>
       </footer>
+      </div>
     </div>
   );
 }
