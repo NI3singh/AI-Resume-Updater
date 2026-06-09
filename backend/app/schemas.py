@@ -51,3 +51,34 @@ class ForkIn(BaseModel):
 
 class CompileIn(BaseModel):
     latex: str = Field(min_length=1)
+
+
+# ── Resume Upload pipeline (extract → parse → verify) ───────────────────────
+
+
+class ExtractOut(BaseModel):
+    text: str
+
+
+class ParseIn(BaseModel):
+    text: str = Field(min_length=1)
+
+
+class ParseOut(BaseModel):
+    data: dict[str, Any]
+
+
+class VerifySummary(BaseModel):
+    sections_found: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+
+
+class VerifyIn(BaseModel):
+    text: str = Field(min_length=1)
+    data: dict[str, Any]
+
+
+class VerifyOut(BaseModel):
+    data: dict[str, Any]
+    warnings: list[str] = Field(default_factory=list)
+    summary: VerifySummary = Field(default_factory=VerifySummary)

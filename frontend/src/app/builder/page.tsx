@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Download, FileCode, Eye, Loader2,
   Zap, Copy, Check, Save, LogOut, CloudOff, Cloud,
-  Undo2, RotateCcw, AlertTriangle,
+  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine,
 } from 'lucide-react';
 import { ResumeData, SectionConfig, ActiveSection, ALL_SECTIONS } from '@/lib/types';
 import { generateLatex } from '@/lib/latexTemplate';
@@ -16,6 +16,7 @@ import { compileToPDF, downloadBlob, downloadLatex, resumeFileBase } from '@/lib
 import FormPanel from '@/components/builder/FormPanel';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import ResumeSwitcher from '@/components/builder/ResumeSwitcher';
+import UploadPanel from '@/components/builder/UploadPanel';
 import { useAuth } from '@/context/AuthContext';
 import { useResumes } from '@/hooks/useResumes';
 
@@ -46,6 +47,7 @@ function BuilderContent() {
   }, [user, authLoading]);
 
   const [activeSection, setActiveSection] = useState<ActiveSection>('personal');
+  const [builderMode, setBuilderMode]   = useState<'manual' | 'upload'>('manual');
   const [latexCode, setLatexCode]       = useState('');
   const [previewTab, setPreviewTab]     = useState<PreviewTab>('preview');
   const [isCompiling, setIsCompiling]   = useState(false);
@@ -253,6 +255,26 @@ function BuilderContent() {
     } finally { setIsCompiling(false); }
   };
 
+  // ── Import from an uploaded file (Upload mode) ───────────────────────────────
+  // Fills the active resume with parsed data (unsaved + undoable), switches back
+  // to Manual, and compiles straight from the new data so the preview updates.
+  const handleImport = async (data: ResumeData) => {
+    const merged: ResumeData = { ...data, custom: resumeData?.custom ?? [] };
+    handleDataChange(merged);          // sets resumeData, records undo, flags unsaved
+    setActiveSection('personal');
+    setBuilderMode('manual');
+    setIsCompiling(true); setCompileError('');
+    try {
+      const blob = await compileToPDF(generateLatex(merged, sectionConfig));
+      setPdfUrl(URL.createObjectURL(blob));
+      setPreviewTab('preview');
+    } catch (err) {
+      setCompileError(err instanceof Error ? err.message : 'Compilation failed');
+    } finally {
+      setIsCompiling(false);
+    }
+  };
+
   const handleDownloadPDF = async () => {
     const filename = `${resumeFileBase(resumeData?.personal.name ?? '', activeResume?.name ?? '')}.pdf`;
     if (pdfUrl) {
@@ -380,6 +402,32 @@ function BuilderContent() {
             />
           </div>
 
+          <div className="w-px h-4 bg-ink-700/80 flex-shrink-0 hidden sm:block" />
+
+          {/* Manual / Upload mode toggle */}
+          <div className="flex items-center gap-0.5 bg-ink-800/60 rounded-lg p-0.5 border border-ink-700/50 flex-shrink-0">
+            <button
+              onClick={() => setBuilderMode('manual')}
+              title="Fill the resume manually"
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-all duration-200 cursor-pointer ${
+                builderMode === 'manual' ? 'bg-ink-700 text-ivory shadow-sm' : 'text-ivory-muted hover:text-ivory'
+              }`}
+            >
+              <PencilLine size={12} />
+              <span className="hidden lg:inline">Manual</span>
+            </button>
+            <button
+              onClick={() => setBuilderMode('upload')}
+              title="Import from an existing resume file"
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-all duration-200 cursor-pointer ${
+                builderMode === 'upload' ? 'bg-gold/15 text-gold shadow-sm' : 'text-ivory-muted hover:text-ivory'
+              }`}
+            >
+              <UploadCloud size={12} />
+              <span className="hidden lg:inline">Upload</span>
+            </button>
+          </div>
+
         </div>
 
         {/* ── Right cluster ── */}
@@ -478,14 +526,18 @@ function BuilderContent() {
       <div ref={mainRef} className="flex flex-1 overflow-hidden">
         {/* Left Panel — Form (resizable: drag the divider on its right edge) */}
         <div style={{ width: formWidth }} className="flex-shrink-0 overflow-y-auto bg-ink-900/60">
-          <FormPanel
-            data={resumeData}
-            onChange={handleDataChange}
-            activeSection={activeSection}
-            onSectionChange={setActiveSection}
-            sectionConfig={sectionConfig}
-            onSectionConfigChange={handleConfigChange}
-          />
+          {builderMode === 'manual' ? (
+            <FormPanel
+              data={resumeData}
+              onChange={handleDataChange}
+              activeSection={activeSection}
+              onSectionChange={setActiveSection}
+              sectionConfig={sectionConfig}
+              onSectionConfigChange={handleConfigChange}
+            />
+          ) : (
+            <UploadPanel onImport={handleImport} />
+          )}
         </div>
 
         {/* Resize handle — full-height; drag to widen/narrow the form, double-click to reset */}

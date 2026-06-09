@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # PostgreSQL connection (SQLAlchemy URL, psycopg 3 driver).
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/ai_resume_updater"
+    database_url: str = "postgresql+psycopg://postgres:elaunch123456789@localhost:5432/ai_resume_updater"
 
     # JWT signing.
     jwt_secret: str = "change-me-in-env"
@@ -22,6 +22,18 @@ class Settings(BaseSettings):
     # External LaTeX compilation services (primary + fallback).
     latex_compile_url: str = "https://latex.ytotech.com/builds/sync"
     latex_compile_fallback: str = "https://latexonline.cc/compile"
+
+    # Nebius LLM (OpenAI-compatible endpoint) used by the resume Upload feature
+    # to parse and verify uploaded documents. Leave the key blank to disable the
+    # AI import cleanly (the parse/verify endpoints then return 503).
+    nebius_api_key: str = ""
+    nebius_base_url: str = "https://api.tokenfactory.us-central1.nebius.com/v1/"
+    nebius_model: str = "moonshotai/Kimi-K2.6"
+    nebius_max_tokens: int = 8192  # response token budget for parse/verify (0 = let server decide)
+
+    # Resume upload limits.
+    upload_max_bytes: int = 5 * 1024 * 1024  # 5 MB max upload
+    parse_text_limit: int = 16000            # chars of extracted text sent to the LLM
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

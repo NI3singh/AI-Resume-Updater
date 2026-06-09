@@ -159,3 +159,12 @@ export const ALL_SECTIONS: SectionConfig[] = [
   { id: 'certifications',  label: 'Certifications' },
   { id: 'publications',    label: 'Publications' },
 ];
+
+// ── AI Upload import (extract → parse → verify) ─────────────────────────────
+// Result of the backend /tools/verify pass. `data` is still the *raw* LLM
+// object — run it through normalizeResume() before using it as ResumeData.
+export interface VerifyResult {
+  data: unknown;
+  warnings: string[];
+  summary: { sections_found: string[]; missing: string[] };
+}
