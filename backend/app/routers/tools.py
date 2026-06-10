@@ -1,9 +1,10 @@
-"""Tool routes — resume import pipeline + LaTeX compilation.
+"""Tool routes — resume import pipeline, JD tailoring + LaTeX compilation.
 
 All endpoints require an authenticated user.
 - POST /tools/extract-text : uploaded PDF/DOCX/TXT -> plain text (+ hyperlinks)
 - POST /tools/parse        : extracted text        -> structured ResumeData (LLM)
 - POST /tools/verify       : text + parsed data     -> corrected data + warnings (LLM)
+- POST /tools/transform    : resume + job description -> tailored resume (LLM + guard)
 - POST /tools/compile      : LaTeX source           -> compiled PDF bytes
 
 Hyperlinks: in a PDF the URL behind a link is stored as a *link annotation*
@@ -29,12 +30,16 @@ from ..models import User
 from ..schemas import (
     CompileIn,
     ExtractOut,
+    MatchSummary,
     ParseIn,
     ParseOut,
+    TransformIn,
+    TransformOut,
     VerifyIn,
     VerifyOut,
     VerifySummary,
 )
+from ..transform_guard import enforce_no_fabrication, merge_llm_report, prepare_for_llm
 
 router = APIRouter(prefix="/tools", tags=["tools"])
 
@@ -111,6 +116,44 @@ VERIFY_SYSTEM = (
     '  "data": <the corrected resume object>,\n'
     '  "warnings": ["short notes about anything missing, ambiguous, or low-confidence"],\n'
     '  "summary": { "sections_found": [section keys that have content], "missing": [important fields/sections that appear absent] }\n'
+    "}\nNo markdown, no code fences, no commentary."
+)
+
+TRANSFORM_SYSTEM = (
+    "You are a resume tailoring assistant. You are given a candidate's resume as "
+    "structured JSON — every entry carries an \"id\" field — and a target job "
+    "description (JD). Tailor the resume to the job using ONLY what is already in it.\n\n"
+    "ALLOWED (this is the whole job):\n"
+    "- Rephrase experience/project/extracurricular \"bullets\", personal.summary, and "
+    "education \"highlight\" to foreground what matters for this JD.\n"
+    "- Reorder entries within a section and items within skills so the most relevant "
+    "come first.\n"
+    "- Drop entries, bullets, or skill items that are clearly irrelevant to this job "
+    "(omit them from your output).\n"
+    "- Use the JD's terminology in rephrased text ONLY where the resume genuinely "
+    "demonstrates that experience (e.g. say \"REST APIs\" instead of \"web endpoints\" "
+    "if they built them — but never claim a tool/skill the resume doesn't show).\n\n"
+    "FORBIDDEN — copy these through verbatim, character for character:\n"
+    "- Every \"id\" — each entry you output must keep the exact id it had. NEVER "
+    "create a new entry.\n"
+    "- personal: name, email, phone, location, linkedin, github, website.\n"
+    "- experience: role, company, location, startDate, endDate, current, projectSubtitle.\n"
+    "- education: institution, degree, location, gpaFormat, gpaLabel, startDate, endDate.\n"
+    "- projects: name, techStack, githubUrl, liveUrl. skills: category names.\n"
+    "- achievements, certifications, publications: every field (you may only reorder "
+    "or drop whole entries).\n"
+    "- Every URL anywhere. Every number, percentage, metric, and date — NEVER write a "
+    "number that does not appear in that same entry in the source resume.\n\n"
+    "The resume JSON follows this schema (plus the \"id\" field on every entry):\n\n"
+    + _SCHEMA
+    + "\n\nReturn ONLY a JSON object of this form:\n"
+    "{\n"
+    '  "data": <the tailored resume object, same schema, ids preserved>,\n'
+    '  "changes": ["short human-readable notes on what you changed and why"],\n'
+    '  "match": {\n'
+    '    "covered_keywords": [JD skills/requirements the resume genuinely demonstrates],\n'
+    '    "missing_keywords": [JD requirements the resume does NOT show - be honest, do NOT add them to the resume]\n'
+    "  }\n"
     "}\nNo markdown, no code fences, no commentary."
 )
 
@@ -324,6 +367,50 @@ def verify_resume(payload: VerifyIn, current_user: User = Depends(get_current_us
         missing=[str(m) for m in missing] if isinstance(missing, list) else [],
     )
     return VerifyOut(data=data, warnings=warnings, summary=summary)
+
+
+@router.post("/transform", response_model=TransformOut)
+def transform_resume(payload: TransformIn, current_user: User = Depends(get_current_user)) -> TransformOut:
+    present = _sections_present(payload.data)
+    if not present or present == ["personal"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your resume is empty — add some content before tailoring it.",
+        )
+
+    jd = payload.job_description[: settings.parse_text_limit]
+    original = prepare_for_llm(payload.data)
+    user_msg = (
+        f"JOB TITLE: {payload.job_title.strip() or '(not provided)'}\n"
+        f"COMPANY: {payload.company.strip() or '(not provided)'}\n\n"
+        "JOB DESCRIPTION:\n"
+        + jd
+        + "\n\nRESUME JSON (each entry has an \"id\" — preserve them exactly):\n"
+        + json.dumps(original, ensure_ascii=False)
+    )
+
+    try:
+        result = chat_json(TRANSFORM_SYSTEM, user_msg)
+    except LLMNotConfigured as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except LLMError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    data = result.get("data")
+    if not isinstance(data, dict):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The AI returned an unusable result — please try again.",
+        )
+
+    guarded, warnings, computed_changes = enforce_no_fabrication(original, data)
+    changes, covered, missing = merge_llm_report(guarded, result, computed_changes)
+    return TransformOut(
+        data=guarded,
+        changes=changes,
+        warnings=warnings,
+        match=MatchSummary(covered_keywords=covered, missing_keywords=missing),
+    )
 
 
 @router.post("/compile")
