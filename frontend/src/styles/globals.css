@@ -1,5 +1,7 @@
 /* src/styles/globals.css */
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap');
+/* Fonts are self-hosted via next/font in src/app/layout.tsx, which defines
+   --font-jakarta / --font-dm-sans / --font-jetbrains / --font-fraunces.
+   (A Google Fonts @import here would block first paint on a network fetch.) */
 
 @tailwind base;
 @tailwind components;
@@ -12,11 +14,6 @@
 /* Dark Theme (default) */
 :root,
 [data-theme="dark"] {
-  --font-jakarta: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-dm-sans: 'DM Sans', system-ui, sans-serif;
-  --font-jetbrains: 'JetBrains Mono', monospace;
-  --font-fraunces: 'Fraunces', Georgia, 'Times New Roman', serif;
-
   --ink-950: #08080A;
   --ink-900: #0E0E12;
   --ink-800: #16161C;
