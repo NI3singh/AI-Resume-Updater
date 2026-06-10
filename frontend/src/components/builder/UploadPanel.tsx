@@ -4,12 +4,13 @@
 import { useCallback, useRef, useState, type DragEvent } from 'react';
 import { motion } from 'framer-motion';
 import {
-  UploadCloud, FileText, CheckCircle2, Loader2, AlertTriangle,
+  UploadCloud, FileText, CheckCircle2, AlertTriangle,
   Sparkles, RefreshCw, X, Wand2,
 } from 'lucide-react';
 import { ResumeData } from '@/lib/types';
 import { ApiError } from '@/lib/api';
 import { extractText, parseResume, verifyResume, normalizeResume } from '@/lib/resumeImport';
+import { Spinner } from '@/components/ui/Spinner';
 
 interface UploadPanelProps {
   onImport: (data: ResumeData) => void;
@@ -186,7 +187,7 @@ export default function UploadPanel({ onImport }: UploadPanelProps) {
               >
                 <span className="flex-shrink-0">
                   {st === 'done'    && <CheckCircle2 size={15} className="text-jade" />}
-                  {st === 'active'  && <Loader2 size={15} className="text-gold animate-spin" />}
+                  {st === 'active'  && <Spinner size={15} />}
                   {st === 'error'   && <AlertTriangle size={15} className="text-crimson" />}
                   {st === 'pending' && <span className="block w-[15px] h-[15px] rounded-full border border-ink-600" />}
                 </span>

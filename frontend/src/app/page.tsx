@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, FileText, Cpu, Download, GitBranch, Zap, ExternalLink, Sparkles } from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import AmbientGlyphs from '@/components/ui/AmbientGlyphs';
+import Logo, { LogoMark } from '@/components/ui/Logo';
 import { useAuth } from '@/context/AuthContext';
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -40,12 +41,8 @@ export default function HomePage() {
       {/* ── Floating Navbar ───────────────────────────────────────────────── */}
       <nav className="fixed top-4 left-4 right-4 z-50 flex items-center justify-between pl-4 pr-3 py-2.5 rounded-2xl border border-ink-700/60 backdrop-blur-xl bg-ink-900/70 shadow-xl shadow-black/40">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="relative w-8 h-8 rounded-xl border border-gold/45 bg-gold/10 flex items-center justify-center shadow-sm shadow-gold/10 transition-transform duration-300 group-hover:rotate-6">
-            <span className="text-gold text-sm font-mono font-bold">λ</span>
-            <div className="absolute -inset-1 rounded-xl bg-gold/10 blur-md -z-10" />
-          </div>
-          <span className="font-display font-bold text-ivory text-sm tracking-tight">Resume<span className="text-gold">TeX</span></span>
+        <Link href="/" className="group">
+          <Logo size={32} />
         </Link>
 
         {/* Right nav */}
@@ -347,9 +344,7 @@ San Francisco, CA
       <footer className="border-t border-ink-800/60 px-6 py-7">
         <div className="max-w-6xl mx-auto flex items-center justify-between text-xs text-ivory-dim font-mono">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded border border-gold/30 bg-gold/[0.08] flex items-center justify-center">
-              <span className="text-gold text-[9px] font-bold">λ</span>
-            </div>
+            <LogoMark size={20} />
             <span>ResumeTeX</span>
           </div>
           <div className="flex items-center gap-4 text-ink-500">

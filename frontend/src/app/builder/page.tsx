@@ -6,7 +6,7 @@ import { Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, Download, FileCode, Eye, Loader2,
+  ArrowLeft, Download, FileCode, Eye,
   Zap, Copy, Check, Save, LogOut, CloudOff, Cloud,
   Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine,
 } from 'lucide-react';
@@ -17,6 +17,8 @@ import FormPanel from '@/components/builder/FormPanel';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import ResumeSwitcher from '@/components/builder/ResumeSwitcher';
 import UploadPanel from '@/components/builder/UploadPanel';
+import { LogoMark } from '@/components/ui/Logo';
+import { Spinner, PageLoader } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
 import { useResumes } from '@/hooks/useResumes';
 
@@ -294,20 +296,7 @@ function BuilderContent() {
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (authLoading || resumesLoading || !resumeData) {
-    return (
-      <div className="h-screen bg-ink-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative mx-auto mb-5 w-12 h-12">
-            <div className="absolute inset-0 rounded-full bg-gold/10 animate-ping" />
-            <div className="relative w-12 h-12 rounded-2xl border border-gold/30 bg-gold/[0.08] flex items-center justify-center">
-              <span className="text-gold text-xl font-mono font-bold">λ</span>
-            </div>
-          </div>
-          <Loader2 size={18} className="text-gold animate-spin mx-auto mb-3 opacity-60" />
-          <p className="text-ivory/50 text-sm">Loading your resumes...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader label="Loading your resumes…" />;
   }
 
   // ── Save status indicator ────────────────────────────────────────────────────
@@ -321,7 +310,7 @@ function BuilderContent() {
           exit={{ opacity: 0 }}
           className="flex items-center gap-1.5 text-[10px] text-ivory-dim font-mono"
         >
-          <Loader2 size={10} className="animate-spin" /> Saving...
+          <Spinner size={10} /> Saving...
         </motion.span>
       </AnimatePresence>
     );
@@ -381,9 +370,7 @@ function BuilderContent() {
 
           {/* Logo */}
           <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
-            <div className="w-5 h-5 rounded-md border border-gold/40 bg-gold/8 flex items-center justify-center">
-              <span className="text-gold text-[10px] font-mono font-bold">λ</span>
-            </div>
+            <LogoMark size={20} />
             <span className="font-display font-bold text-xs text-ivory hidden lg:block">ResumeTeX</span>
           </div>
 
@@ -664,7 +651,7 @@ function BuilderContent() {
                       disabled={isCompiling}
                       className="btn-primary mx-auto disabled:opacity-50"
                     >
-                      {isCompiling ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                      {isCompiling ? <Spinner size={14} tone="current" /> : <Zap size={14} />}
                       {isCompiling ? 'Compiling...' : 'Compile Now'}
                     </button>
                   </div>
@@ -734,11 +721,7 @@ function BuilderContent() {
 
 export default function BuilderPage() {
   return (
-    <Suspense fallback={
-      <div className="h-screen bg-ink-950 flex items-center justify-center">
-        <Loader2 size={24} className="text-gold animate-spin" />
-      </div>
-    }>
+    <Suspense fallback={<PageLoader label="Opening the builder…" />}>
       <BuilderContent />
     </Suspense>
   );
