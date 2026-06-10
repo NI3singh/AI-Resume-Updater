@@ -6,6 +6,9 @@ const nextConfig = {
   // LLM parse/verify and LaTeX compile calls.
   experimental: {
     proxyTimeout: 180_000, // ms
+    // Import only the icons/components actually used instead of whole
+    // packages — far fewer modules to compile in dev, smaller client bundles.
+    optimizePackageImports: ['lucide-react', 'framer-motion'],
   },
 
   async rewrites() {

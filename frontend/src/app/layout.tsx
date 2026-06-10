@@ -1,8 +1,34 @@
 // src/app/layout.tsx
 import type { Metadata } from 'next';
+import { DM_Sans, Fraunces, JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google';
 import '@/styles/globals.css';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
+
+// Self-hosted via next/font — replaces the render-blocking Google Fonts
+// @import that delayed first paint by a full network round-trip.
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-jakarta',
+  display: 'swap',
+});
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  variable: '--font-dm-sans',
+  display: 'swap',
+});
+const jetbrains = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains',
+  display: 'swap',
+});
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  style: ['normal', 'italic'],
+  axes: ['opsz'],
+  variable: '--font-fraunces',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'LaTeX Resume Builder — Craft Your Professional Resume',
@@ -11,7 +37,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark">
+    <html
+      lang="en"
+      data-theme="dark"
+      className={`${jakarta.variable} ${dmSans.variable} ${jetbrains.variable} ${fraunces.variable}`}
+    >
       <body className="grain min-h-screen bg-ink-950 text-ivory antialiased">
         <AuthProvider>
           <ThemeProvider>

@@ -80,13 +80,19 @@ def fork_from_master(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Resume:
+    # By default the branch copies the master; the Transform feature passes
+    # explicit resume_data/section_config to branch with tailored content.
     master = _get_master(db, current_user)
     version = Resume(
         user_id=current_user.id,
         name=payload.name,
         is_master=False,
-        resume_data=copy.deepcopy(master.resume_data),
-        section_config=copy.deepcopy(master.section_config),
+        resume_data=copy.deepcopy(
+            payload.resume_data if payload.resume_data is not None else master.resume_data
+        ),
+        section_config=copy.deepcopy(
+            payload.section_config if payload.section_config is not None else master.section_config
+        ),
     )
     db.add(version)
     db.commit()

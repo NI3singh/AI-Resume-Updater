@@ -47,6 +47,10 @@ class RenameIn(BaseModel):
 
 class ForkIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    # Optional content overrides: when provided, the new branch is created with
+    # this data instead of a copy of the master (used by the Transform feature).
+    resume_data: dict[str, Any] | None = None
+    section_config: list[Any] | None = None
 
 
 class CompileIn(BaseModel):
@@ -82,3 +86,25 @@ class VerifyOut(BaseModel):
     data: dict[str, Any]
     warnings: list[str] = Field(default_factory=list)
     summary: VerifySummary = Field(default_factory=VerifySummary)
+
+
+# ── Transform (tailor the resume to a job description) ──────────────────────
+
+
+class TransformIn(BaseModel):
+    job_description: str = Field(min_length=1)
+    job_title: str = Field(default="", max_length=200)
+    company: str = Field(default="", max_length=200)
+    data: dict[str, Any]
+
+
+class MatchSummary(BaseModel):
+    covered_keywords: list[str] = Field(default_factory=list)
+    missing_keywords: list[str] = Field(default_factory=list)
+
+
+class TransformOut(BaseModel):
+    data: dict[str, Any]
+    changes: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    match: MatchSummary = Field(default_factory=MatchSummary)

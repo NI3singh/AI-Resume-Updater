@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Download, FileCode, Eye,
   Zap, Copy, Check, Save, LogOut, CloudOff, Cloud,
-  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine,
+  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine, Target,
 } from 'lucide-react';
 import { ResumeData, SectionConfig, ActiveSection, ALL_SECTIONS } from '@/lib/types';
 import { generateLatex } from '@/lib/latexTemplate';
@@ -17,6 +17,7 @@ import FormPanel from '@/components/builder/FormPanel';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import ResumeSwitcher from '@/components/builder/ResumeSwitcher';
 import UploadPanel from '@/components/builder/UploadPanel';
+import TransformPanel from '@/components/builder/TransformPanel';
 import { LogoMark } from '@/components/ui/Logo';
 import { Spinner, PageLoader } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
@@ -49,7 +50,7 @@ function BuilderContent() {
   }, [user, authLoading]);
 
   const [activeSection, setActiveSection] = useState<ActiveSection>('personal');
-  const [builderMode, setBuilderMode]   = useState<'manual' | 'upload'>('manual');
+  const [builderMode, setBuilderMode]   = useState<'manual' | 'upload' | 'transform'>('manual');
   const [latexCode, setLatexCode]       = useState('');
   const [previewTab, setPreviewTab]     = useState<PreviewTab>('preview');
   const [isCompiling, setIsCompiling]   = useState(false);
@@ -134,14 +135,22 @@ function BuilderContent() {
   const lastSaved = useRef<Snapshot | null>(null);
   const [hasUnsaved, setHasUnsaved] = useState(false);
 
-  // Confirmation dialog shown before Save / Revert / Regenerate act.
+  // Confirmation dialog shown before Save / Revert / branch-from-Transform act.
   const [confirmDialog, setConfirmDialog] = useState<null | {
     title: string;
     message: string;
     confirmLabel: string;
     tone: 'gold' | 'crimson';
     onConfirm: () => void;
+    onCancel?: () => void; // lets async callers (Transform branch save) observe a dismissal
   }>(null);
+
+  const cancelConfirmDialog = () => {
+    setConfirmDialog(prev => {
+      prev?.onCancel?.();
+      return null;
+    });
+  };
 
   // ── Load active resume ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -276,6 +285,39 @@ function BuilderContent() {
       setIsCompiling(false);
     }
   };
+
+  // ── Save tailored data as a new resume branch (Transform mode) ──────────────
+  // Forks with explicit content; the new branch becomes active and the existing
+  // activeResume effect loads it with a clean undo/saved baseline.
+  const handleSaveBranch = async (name: string, data: ResumeData): Promise<boolean> => {
+    const merged: ResumeData = { ...data, custom: resumeData?.custom ?? [] };
+    if (hasUnsaved) {
+      const proceed = await new Promise<boolean>(resolve => {
+        setConfirmDialog({
+          title: 'Create branch and switch to it?',
+          message: `Your unsaved edits to "${activeResume?.name ?? 'this resume'}" will be left behind (last saved version kept). The tailored resume is saved as the new branch.`,
+          confirmLabel: 'Create branch',
+          tone: 'gold',
+          onConfirm: () => { setConfirmDialog(null); resolve(true); },
+          onCancel: () => resolve(false),
+        });
+      });
+      if (!proceed) return false;
+    }
+    const created = await forkFromMaster(name, merged, sectionConfig);
+    if (!created) return false;
+    setBuilderMode('manual');
+    setActiveSection('personal');
+    return true;
+  };
+
+  // Whether there is anything tailorable beyond personal info (mirrors the
+  // server's empty-resume check on /tools/transform).
+  const hasContent = !!resumeData && [
+    resumeData.education, resumeData.skills, resumeData.projects,
+    resumeData.experience, resumeData.extracurricular, resumeData.achievements,
+    resumeData.certifications, resumeData.publications,
+  ].some(section => (section?.length ?? 0) > 0);
 
   const handleDownloadPDF = async () => {
     const filename = `${resumeFileBase(resumeData?.personal.name ?? '', activeResume?.name ?? '')}.pdf`;
@@ -413,6 +455,16 @@ function BuilderContent() {
               <UploadCloud size={12} />
               <span className="hidden lg:inline">Upload</span>
             </button>
+            <button
+              onClick={() => setBuilderMode('transform')}
+              title="Tailor this resume to a job description with AI"
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-all duration-200 cursor-pointer ${
+                builderMode === 'transform' ? 'bg-gold/15 text-gold shadow-sm' : 'text-ivory-muted hover:text-ivory'
+              }`}
+            >
+              <Target size={12} />
+              <span className="hidden lg:inline">Transform</span>
+            </button>
           </div>
 
         </div>
@@ -522,8 +574,15 @@ function BuilderContent() {
               sectionConfig={sectionConfig}
               onSectionConfigChange={handleConfigChange}
             />
-          ) : (
+          ) : builderMode === 'upload' ? (
             <UploadPanel onImport={handleImport} />
+          ) : (
+            <TransformPanel
+              data={resumeData}
+              hasContent={hasContent}
+              onApply={handleImport}
+              onSaveBranch={handleSaveBranch}
+            />
           )}
         </div>
 
@@ -670,7 +729,7 @@ function BuilderContent() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-            onClick={() => setConfirmDialog(null)}
+            onClick={cancelConfirmDialog}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -695,7 +754,7 @@ function BuilderContent() {
               </div>
               <div className="flex items-center justify-end gap-2">
                 <button
-                  onClick={() => setConfirmDialog(null)}
+                  onClick={cancelConfirmDialog}
                   className="px-3 py-1.5 text-xs rounded-lg border border-ink-600/80 text-ivory-muted hover:text-ivory hover:bg-ink-800/50 transition-colors cursor-pointer"
                 >
                   Cancel

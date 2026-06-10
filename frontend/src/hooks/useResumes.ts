@@ -94,11 +94,21 @@ export function useResumes() {
   }, []);
 
   // ── Fork from master (create a new version) ────────────────────────────────
-  const forkFromMaster = useCallback(async (versionName: string): Promise<ResumeRecord | null> => {
+  // With resumeData/sectionConfig the branch is created with that content
+  // instead of a master copy (used by Transform's "Save as new branch").
+  const forkFromMaster = useCallback(async (
+    versionName: string,
+    resumeData?: ResumeData,
+    sectionConfig?: SectionConfig[],
+  ): Promise<ResumeRecord | null> => {
     try {
       const created = await api<ResumeRecord>('/resumes/fork', {
         method: 'POST',
-        body: JSON.stringify({ name: versionName }),
+        body: JSON.stringify({
+          name: versionName,
+          ...(resumeData ? { resume_data: resumeData } : {}),
+          ...(sectionConfig ? { section_config: sectionConfig } : {}),
+        }),
       });
       setResumes(prev => [...prev, created]);
       setActiveResume(created);
