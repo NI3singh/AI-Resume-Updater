@@ -1,3 +1,18 @@
+### 📄 d:\AI-Resume-Updater\frontend\.env.local
+*Saved at: 6/10/2026, 7:19:27 PM*
+
+**[REMOVED]**
+```
+(from line ~5)
+BACKEND_ORIGIN=http://127.0.0.1:8001
+```
+**[ADDED]**
+```
+5     BACKEND_ORIGIN=http://127.0.0.1:8000
+```
+
+---
+
 ### 📄 d:\gate-pdfs\kit\README.md
 *Saved at: 6/10/2026, 2:38:55 PM*
 

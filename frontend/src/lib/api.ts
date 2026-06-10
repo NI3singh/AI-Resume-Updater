@@ -40,7 +40,15 @@ async function errorFrom(res: Response): Promise<ApiError> {
     payload && typeof payload === 'object' && 'detail' in payload
       ? (payload as { detail: unknown }).detail
       : payload;
-  const message = typeof detail === 'string' ? detail : res.statusText || 'Request failed';
+  let message = typeof detail === 'string' ? detail : res.statusText || 'Request failed';
+  // FastAPI validation errors (422) put a list of {loc, msg} objects in detail.
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0] as { msg?: unknown; loc?: unknown };
+    if (typeof first.msg === 'string') {
+      const field = Array.isArray(first.loc) ? String(first.loc[first.loc.length - 1]) : '';
+      message = field ? `${field}: ${first.msg}` : first.msg;
+    }
+  }
   return new ApiError(res.status, message);
 }
 

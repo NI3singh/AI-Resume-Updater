@@ -62,10 +62,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Optimistic: flip the UI immediately; server-side session revocation is
+    // best-effort in the background (the cookie is HttpOnly — only the backend
+    // can clear it, but the UI shouldn't freeze waiting on that round-trip).
+    setUser(null);
     try {
       await api('/auth/logout', { method: 'POST' });
-    } finally {
-      setUser(null);
+    } catch (err) {
+      console.error('logout:', err);
     }
   }, []);
 

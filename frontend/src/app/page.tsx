@@ -2,39 +2,66 @@
 'use client';
 
 import Link from 'next/link';
+import { useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowRight, FileText, Cpu, Download, GitBranch, Zap, ExternalLink, Sparkles } from 'lucide-react';
+import { ArrowRight, FileText, Cpu, Download, GitBranch, Zap, ExternalLink, Sparkles, UploadCloud, Target } from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import AmbientGlyphs from '@/components/ui/AmbientGlyphs';
 import Logo, { LogoMark } from '@/components/ui/Logo';
+import { PageLoader } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 const features = [
-  { icon: FileText,  title: 'Your Template, Your Rules', desc: 'Built around your exact LaTeX template. No generic defaults — it adapts to your structure.' },
-  { icon: Cpu,       title: 'Live LaTeX Preview',        desc: 'Watch the LaTeX source regenerate as you type. Every field maps straight into your template.' },
-  { icon: GitBranch, title: 'Versions & Drafts',         desc: 'Keep a master resume and branch tailored versions. Save, revert, and switch anytime.' },
-  { icon: Download,  title: 'Compile to PDF',            desc: 'One click compiles your filled LaTeX through an online engine. Download a pixel-perfect PDF.' },
+  { icon: FileText,    title: 'Your Template, Your Rules', desc: 'Built around your exact LaTeX template. No generic defaults — it adapts to your structure.' },
+  { icon: UploadCloud, title: 'Import with AI',            desc: 'Upload your existing resume and AI reads it into every field for you — you review before it lands.' },
+  { icon: Target,      title: 'Tailor to Any Job',         desc: 'Paste a job description and AI reshapes your resume for it — rephrasing what’s there, never inventing facts.' },
+  { icon: Cpu,         title: 'Live LaTeX Preview',        desc: 'Watch the LaTeX source regenerate as you type. Every field maps straight into your template.' },
+  { icon: GitBranch,   title: 'Versions & Branches',       desc: 'Keep a master resume and branch a tailored version per job. Save, revert, and switch anytime.' },
+  { icon: Download,    title: 'Compile to PDF',            desc: 'One click compiles your filled LaTeX through an online engine. Download a pixel-perfect PDF.' },
 ];
 
 const steps = [
-  { num: '01', title: 'Fill your details',   desc: 'Enter your info into the template fields — personal, experience, projects, skills, and more.' },
-  { num: '02', title: 'Review & edit',       desc: 'See the live LaTeX code update as you type. Bold a word, reorder sections, tweak any field.' },
+  { num: '01', title: 'Bring your resume',   desc: 'Fill in the fields yourself, or upload your existing resume and let AI import everything for you.' },
+  { num: '02', title: 'Refine & tailor',     desc: 'Watch the LaTeX update live as you edit. Chasing a specific role? Paste the job description and tailor a branch for it.' },
   { num: '03', title: 'Compile & download',  desc: 'Hit compile. Your LaTeX is sent to the engine and returns a perfectly typeset PDF.' },
 ];
 
 export default function HomePage() {
+  const router = useRouter();
   const { user, loading, signOut } = useAuth();
+  const [openingBuilder, startNavigation] = useTransition();
 
-  const firstName = user?.email
-    ? user.email.split('@')[0].charAt(0).toUpperCase() + user.email.split('@')[0].slice(1)
-    : null;
+  // Greet by chosen display name; fall back to the email prefix.
+  const rawName = user ? (user.display_name?.trim() || user.email.split('@')[0]) : null;
+  const firstWord = rawName?.split(/\s+/)[0] ?? null;
+  const firstName = firstWord ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1) : null;
+
+  // Client-side navigation to /builder can take a moment (the route chunk has
+  // to load/compile before the page swaps) — show the brand loader meanwhile.
+  const goToBuilder = (e: React.MouseEvent) => {
+    e.preventDefault();
+    startNavigation(() => router.push('/builder'));
+  };
 
   return (
     <div className="min-h-screen bg-ink-950 overflow-x-hidden selection:bg-gold/25 selection:text-ivory">
       {/* Ambient drifting golden LaTeX glyphs (behind everything, click-through) */}
       <AmbientGlyphs />
+
+      {/* Route-transition overlay — covers the wait while /builder loads */}
+      {openingBuilder && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[200]"
+        >
+          <PageLoader label="Opening the builder…" />
+        </motion.div>
+      )}
 
       <div className="relative z-10">
 
@@ -64,7 +91,7 @@ export default function HomePage() {
               <span className="hidden sm:block text-xs text-ivory-muted font-mono">
                 Hey, <span className="text-ivory font-semibold">{firstName}</span>
               </span>
-              <Link href="/builder" className="btn-primary !px-4 !py-1.5 !text-xs !rounded-lg">
+              <Link href="/builder" onClick={goToBuilder} className="btn-primary !px-4 !py-1.5 !text-xs !rounded-lg">
                 Open Builder
                 <ArrowRight size={12} />
               </Link>
@@ -120,7 +147,7 @@ export default function HomePage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-75" />
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-gold" />
             </span>
-            LaTeX-powered · Pixel-perfect · Yours
+            LaTeX-powered · AI-assisted · Pixel-perfect
           </motion.div>
 
           {/* Title — Fraunces serif */}
@@ -142,8 +169,8 @@ export default function HomePage() {
             transition={{ duration: 0.7, ease: EASE, delay: 0.16 }}
             className="text-ivory/65 text-base md:text-lg max-w-xl mx-auto mb-9 leading-relaxed text-balance"
           >
-            Fill your personal LaTeX template field by field, watch the source update
-            live, and compile to a pixel-perfect PDF — in one click.
+            Fill your template by hand, import your old resume with AI, or tailor it
+            to a job description — then compile to a pixel-perfect PDF in one click.
           </motion.p>
 
           {/* CTAs */}
@@ -154,7 +181,7 @@ export default function HomePage() {
             className="flex items-center justify-center gap-3 flex-wrap"
           >
             {user ? (
-              <Link href="/builder" className="btn-primary !px-7 !py-3">
+              <Link href="/builder" onClick={goToBuilder} className="btn-primary !px-7 !py-3">
                 Open Builder
                 <ArrowRight size={15} />
               </Link>
@@ -238,7 +265,7 @@ San Francisco, CA
           <h2 className="font-serif text-4xl md:text-5xl font-semibold text-ivory mt-2 tracking-tight">Everything you need</h2>
           <p className="text-ivory/50 text-sm mt-4 max-w-md mx-auto">From raw fields to publication-quality PDF — in seconds.</p>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {features.map((f, i) => (
             <motion.div
               key={f.title}
@@ -332,7 +359,11 @@ San Francisco, CA
             viewport={{ once: true }}
             transition={{ duration: 0.6, ease: EASE, delay: 0.22 }}
           >
-            <Link href={user ? '/builder' : '/login'} className="btn-primary !px-8 !py-3.5 !text-sm">
+            <Link
+              href={user ? '/builder' : '/login'}
+              onClick={user ? goToBuilder : undefined}
+              className="btn-primary !px-8 !py-3.5 !text-sm"
+            >
               <Zap size={15} />
               {user ? 'Launch Builder' : 'Start Building Free'}
             </Link>
