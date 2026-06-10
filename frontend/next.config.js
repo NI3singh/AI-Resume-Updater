@@ -2,10 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Proxy backend calls through the Next dev server so they are SAME-ORIGIN
-  // with the app. This makes the HttpOnly auth cookie work over plain HTTP
-  // (no cross-site SameSite issues, no CORS) regardless of whether you open
-  // the app via localhost or 127.0.0.1.
+  // Rewrites are proxied with a 30s timeout by default — too short for the
+  // LLM parse/verify and LaTeX compile calls.
+  experimental: {
+    proxyTimeout: 180_000, // ms
+  },
+
   async rewrites() {
     const backend = process.env.BACKEND_ORIGIN ?? 'http://127.0.0.1:8000';
     return [

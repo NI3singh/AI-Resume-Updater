@@ -30,7 +30,10 @@ def nebius_client() -> OpenAI:
     return OpenAI(
         api_key=settings.nebius_api_key,
         base_url=settings.nebius_base_url,
-        timeout=60.0,
+        # Reasoning models (e.g. MiniMax-M2) can be slow on a cold start or a
+        # large document — give the call room to finish and return a real
+        # response instead of being aborted mid-flight.
+        timeout=120.0,
     )
 
 
@@ -69,10 +72,12 @@ def chat_json(system: str, user: str) -> dict[str, Any]:
 
     OpenAI-compatible endpoints vary: some quietly return an **empty** message
     (or a 400) for ``response_format=json_object``, others reject ``max_tokens``.
-    So we try progressively simpler requests and take the first that yields
-    non-empty content:
-        1. JSON mode + max_tokens
-        2. plain      + max_tokens
+    Plain mode is tried FIRST because for reasoning models (MiniMax-M2 et al.)
+    JSON mode triggers far more "thinking" tokens — slower and prone to cold
+    spikes — while the strict prompt already yields clean JSON without it.
+    We try progressively and take the first attempt with non-empty content:
+        1. plain      + max_tokens   (fast path)
+        2. JSON mode  + max_tokens   (fallback if plain returns empty / errors)
         3. plain      (no max_tokens)
     """
     client = nebius_client()  # LLMNotConfigured propagates as-is.
@@ -82,8 +87,8 @@ def chat_json(system: str, user: str) -> dict[str, Any]:
     ]
     mt = settings.nebius_max_tokens
     attempts: list[dict[str, Any]] = [
-        {"response_format": {"type": "json_object"}, "max_tokens": mt},
         {"max_tokens": mt},
+        {"response_format": {"type": "json_object"}, "max_tokens": mt},
         {},
     ]
 

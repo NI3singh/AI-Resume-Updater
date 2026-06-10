@@ -26,9 +26,9 @@ class Settings(BaseSettings):
     # Nebius LLM (OpenAI-compatible endpoint) used by the resume Upload feature
     # to parse and verify uploaded documents. Leave the key blank to disable the
     # AI import cleanly (the parse/verify endpoints then return 503).
-    nebius_api_key: str = ""
+    nebius_api_key: str = "v1.CmQKHHN0YXRpY2tleS1lMDBrZGV5cGo3NzAxOGVmeHASIXNlcnZpY2VhY2NvdW50LWUwMGp2cWQ0M2U4cmhhNDJ0eDIMCOL9oNEGEJnirMgCOgwI34C5nAcQwLjYhwJAAloDZTAw.AAAAAAAAAAGfSz71xUJPKJZK3Rk0c7F1G9wfQWQx403pVptwk973bMHM0LSCl-nyHR9UlBT3nHDXllGirPPUugom1F5QFEUC"
     nebius_base_url: str = "https://api.tokenfactory.us-central1.nebius.com/v1/"
-    nebius_model: str = "moonshotai/Kimi-K2.6"
+    nebius_model: str = "MiniMaxAI/MiniMax-M2.5"
     nebius_max_tokens: int = 8192  # response token budget for parse/verify (0 = let server decide)
 
     # Resume upload limits.
