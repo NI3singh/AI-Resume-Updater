@@ -6,7 +6,9 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError } from '@/lib/api';
-import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
+import { LogoMark } from '@/components/ui/Logo';
+import { Spinner, PageLoader } from '@/components/ui/Spinner';
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
@@ -51,11 +53,7 @@ export default function LoginPage() {
     }
   };
 
-  if (loading) return (
-    <div className="h-screen bg-ink-950 flex items-center justify-center">
-      <Loader2 size={24} className="text-gold animate-spin" />
-    </div>
-  );
+  if (loading) return <PageLoader label="Checking your session…" />;
 
   return (
     <div className="min-h-screen bg-ink-950 flex items-center justify-center p-4 relative overflow-hidden selection:bg-gold/25 selection:text-ivory">
@@ -85,9 +83,8 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="relative inline-flex items-center justify-center mb-5">
             <div className="absolute w-16 h-16 rounded-full bg-gold/12 blur-xl" />
-            <div className="relative w-14 h-14 rounded-2xl border border-gold/35 bg-gold/[0.08] flex items-center justify-center shadow-lg shadow-gold/10">
-              <span className="text-gold text-2xl font-mono font-bold">λ</span>
-            </div>
+            {/* relative — keeps the mark painting above the absolute glow */}
+            <LogoMark size={56} className="relative" />
           </div>
           <h1 className="font-serif text-3xl font-semibold text-ivory tracking-tight text-balance">
             {mode === 'login' ? 'Welcome back.' : 'Create your account.'}
@@ -184,7 +181,7 @@ export default function LoginPage() {
 
             {/* Submit */}
             <button onClick={handleSubmit} disabled={submitting} className="btn-primary w-full mt-1">
-              {submitting && <Loader2 size={14} className="animate-spin" />}
+              {submitting && <Spinner size={14} tone="current" />}
               {mode === 'login' ? 'Log In' : 'Create Account'}
               {!submitting && <ArrowRight size={14} />}
             </button>

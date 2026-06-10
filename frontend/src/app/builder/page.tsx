@@ -6,9 +6,9 @@ import { Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, Download, FileCode, Eye, Loader2,
+  ArrowLeft, Download, FileCode, Eye,
   Zap, Copy, Check, Save, LogOut, CloudOff, Cloud,
-  Undo2, RotateCcw, AlertTriangle,
+  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine,
 } from 'lucide-react';
 import { ResumeData, SectionConfig, ActiveSection, ALL_SECTIONS } from '@/lib/types';
 import { generateLatex } from '@/lib/latexTemplate';
@@ -16,6 +16,9 @@ import { compileToPDF, downloadBlob, downloadLatex, resumeFileBase } from '@/lib
 import FormPanel from '@/components/builder/FormPanel';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import ResumeSwitcher from '@/components/builder/ResumeSwitcher';
+import UploadPanel from '@/components/builder/UploadPanel';
+import { LogoMark } from '@/components/ui/Logo';
+import { Spinner, PageLoader } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
 import { useResumes } from '@/hooks/useResumes';
 
@@ -46,6 +49,7 @@ function BuilderContent() {
   }, [user, authLoading]);
 
   const [activeSection, setActiveSection] = useState<ActiveSection>('personal');
+  const [builderMode, setBuilderMode]   = useState<'manual' | 'upload'>('manual');
   const [latexCode, setLatexCode]       = useState('');
   const [previewTab, setPreviewTab]     = useState<PreviewTab>('preview');
   const [isCompiling, setIsCompiling]   = useState(false);
@@ -253,6 +257,26 @@ function BuilderContent() {
     } finally { setIsCompiling(false); }
   };
 
+  // ── Import from an uploaded file (Upload mode) ───────────────────────────────
+  // Fills the active resume with parsed data (unsaved + undoable), switches back
+  // to Manual, and compiles straight from the new data so the preview updates.
+  const handleImport = async (data: ResumeData) => {
+    const merged: ResumeData = { ...data, custom: resumeData?.custom ?? [] };
+    handleDataChange(merged);          // sets resumeData, records undo, flags unsaved
+    setActiveSection('personal');
+    setBuilderMode('manual');
+    setIsCompiling(true); setCompileError('');
+    try {
+      const blob = await compileToPDF(generateLatex(merged, sectionConfig));
+      setPdfUrl(URL.createObjectURL(blob));
+      setPreviewTab('preview');
+    } catch (err) {
+      setCompileError(err instanceof Error ? err.message : 'Compilation failed');
+    } finally {
+      setIsCompiling(false);
+    }
+  };
+
   const handleDownloadPDF = async () => {
     const filename = `${resumeFileBase(resumeData?.personal.name ?? '', activeResume?.name ?? '')}.pdf`;
     if (pdfUrl) {
@@ -272,20 +296,7 @@ function BuilderContent() {
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (authLoading || resumesLoading || !resumeData) {
-    return (
-      <div className="h-screen bg-ink-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative mx-auto mb-5 w-12 h-12">
-            <div className="absolute inset-0 rounded-full bg-gold/10 animate-ping" />
-            <div className="relative w-12 h-12 rounded-2xl border border-gold/30 bg-gold/[0.08] flex items-center justify-center">
-              <span className="text-gold text-xl font-mono font-bold">λ</span>
-            </div>
-          </div>
-          <Loader2 size={18} className="text-gold animate-spin mx-auto mb-3 opacity-60" />
-          <p className="text-ivory/50 text-sm">Loading your resumes...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader label="Loading your resumes…" />;
   }
 
   // ── Save status indicator ────────────────────────────────────────────────────
@@ -299,7 +310,7 @@ function BuilderContent() {
           exit={{ opacity: 0 }}
           className="flex items-center gap-1.5 text-[10px] text-ivory-dim font-mono"
         >
-          <Loader2 size={10} className="animate-spin" /> Saving...
+          <Spinner size={10} /> Saving...
         </motion.span>
       </AnimatePresence>
     );
@@ -359,9 +370,7 @@ function BuilderContent() {
 
           {/* Logo */}
           <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
-            <div className="w-5 h-5 rounded-md border border-gold/40 bg-gold/8 flex items-center justify-center">
-              <span className="text-gold text-[10px] font-mono font-bold">λ</span>
-            </div>
+            <LogoMark size={20} />
             <span className="font-display font-bold text-xs text-ivory hidden lg:block">ResumeTeX</span>
           </div>
 
@@ -378,6 +387,32 @@ function BuilderContent() {
               onRename={rename}
               onRestoreToMaster={(id) => restoreToMaster(id)}
             />
+          </div>
+
+          <div className="w-px h-4 bg-ink-700/80 flex-shrink-0 hidden sm:block" />
+
+          {/* Manual / Upload mode toggle */}
+          <div className="flex items-center gap-0.5 bg-ink-800/60 rounded-lg p-0.5 border border-ink-700/50 flex-shrink-0">
+            <button
+              onClick={() => setBuilderMode('manual')}
+              title="Fill the resume manually"
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-all duration-200 cursor-pointer ${
+                builderMode === 'manual' ? 'bg-ink-700 text-ivory shadow-sm' : 'text-ivory-muted hover:text-ivory'
+              }`}
+            >
+              <PencilLine size={12} />
+              <span className="hidden lg:inline">Manual</span>
+            </button>
+            <button
+              onClick={() => setBuilderMode('upload')}
+              title="Import from an existing resume file"
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-all duration-200 cursor-pointer ${
+                builderMode === 'upload' ? 'bg-gold/15 text-gold shadow-sm' : 'text-ivory-muted hover:text-ivory'
+              }`}
+            >
+              <UploadCloud size={12} />
+              <span className="hidden lg:inline">Upload</span>
+            </button>
           </div>
 
         </div>
@@ -478,14 +513,18 @@ function BuilderContent() {
       <div ref={mainRef} className="flex flex-1 overflow-hidden">
         {/* Left Panel — Form (resizable: drag the divider on its right edge) */}
         <div style={{ width: formWidth }} className="flex-shrink-0 overflow-y-auto bg-ink-900/60">
-          <FormPanel
-            data={resumeData}
-            onChange={handleDataChange}
-            activeSection={activeSection}
-            onSectionChange={setActiveSection}
-            sectionConfig={sectionConfig}
-            onSectionConfigChange={handleConfigChange}
-          />
+          {builderMode === 'manual' ? (
+            <FormPanel
+              data={resumeData}
+              onChange={handleDataChange}
+              activeSection={activeSection}
+              onSectionChange={setActiveSection}
+              sectionConfig={sectionConfig}
+              onSectionConfigChange={handleConfigChange}
+            />
+          ) : (
+            <UploadPanel onImport={handleImport} />
+          )}
         </div>
 
         {/* Resize handle — full-height; drag to widen/narrow the form, double-click to reset */}
@@ -612,7 +651,7 @@ function BuilderContent() {
                       disabled={isCompiling}
                       className="btn-primary mx-auto disabled:opacity-50"
                     >
-                      {isCompiling ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                      {isCompiling ? <Spinner size={14} tone="current" /> : <Zap size={14} />}
                       {isCompiling ? 'Compiling...' : 'Compile Now'}
                     </button>
                   </div>
@@ -682,11 +721,7 @@ function BuilderContent() {
 
 export default function BuilderPage() {
   return (
-    <Suspense fallback={
-      <div className="h-screen bg-ink-950 flex items-center justify-center">
-        <Loader2 size={24} className="text-gold animate-spin" />
-      </div>
-    }>
+    <Suspense fallback={<PageLoader label="Opening the builder…" />}>
       <BuilderContent />
     </Suspense>
   );
