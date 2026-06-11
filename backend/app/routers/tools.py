@@ -4,7 +4,8 @@ All endpoints require an authenticated user.
 - POST /tools/extract-text : uploaded PDF/DOCX/TXT -> plain text (+ hyperlinks)
 - POST /tools/parse        : extracted text        -> structured ResumeData (LLM)
 - POST /tools/verify       : text + parsed data     -> corrected data + warnings (LLM)
-- POST /tools/transform    : resume + job description -> tailored resume (LLM + guard)
+- POST /tools/transform    : resume + job description -> tailored resume (LLM + guard);
+                             additionally gated behind a Gated Access token (see gate.py)
 - POST /tools/compile      : LaTeX source           -> compiled PDF bytes
 
 Hyperlinks: in a PDF the URL behind a link is stored as a *link annotation*
@@ -25,6 +26,7 @@ from pypdf import PdfReader
 
 from ..config import settings
 from ..deps import get_current_user
+from ..gate import require_gate_token
 from ..llm import LLMError, LLMNotConfigured, chat_json
 from ..models import User
 from ..schemas import (
@@ -370,7 +372,13 @@ def verify_resume(payload: VerifyIn, current_user: User = Depends(get_current_us
 
 
 @router.post("/transform", response_model=TransformOut)
-def transform_resume(payload: TransformIn, current_user: User = Depends(get_current_user)) -> TransformOut:
+def transform_resume(
+    payload: TransformIn,
+    current_user: User = Depends(get_current_user),
+    # Tailoring is gated: the user first unlocks it through the /gate flow
+    # (X-Gate-Token header carries the JWT; 403 GATE_LOCKED without it).
+    gate_claims: dict = Depends(require_gate_token),
+) -> TransformOut:
     present = _sections_present(payload.data)
     if not present or present == ["personal"]:
         raise HTTPException(

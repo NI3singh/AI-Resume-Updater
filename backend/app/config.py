@@ -35,7 +35,9 @@ class Settings(BaseSettings):
     upload_max_bytes: int = 5 * 1024 * 1024  # 5 MB max upload
     parse_text_limit: int = 16000            # chars of extracted text sent to the LLM
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # extra="ignore": .env also carries keys for other consumers (Gated Access
+    # reads GATED_ACCESS_*/GITHUB_*/SMTP_* via os.environ) — don't reject them.
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @field_validator("database_url")
     @classmethod

@@ -1,0 +1,45 @@
+# Gated Access configuration (the `gated-access` PyPI package, mounted at
+# /gate by app/main.py). It gates the AI Transform feature: sign in -> do the
+# action -> get a one-time code by email -> redeem it for an access token.
+#
+# Demo mode (below) needs nothing external: the sign-in is simulated, the
+# action is a button, and the code lands in an on-screen demo inbox.
+#
+# Going live:
+#   1. demo_mode: false, identity.provider: github, verify.type: github_follow
+#      (do NOT use github_star for a public gate — GitHub forbids incentivized
+#      starring), email.provider: resend or smtp, storage.backend: sqlite.
+#   2. Put the secrets in backend/.env (app/gate.py loads it into the process
+#      environment; env always overrides this file):
+#        GATED_ACCESS_JWT_SECRET / GATED_ACCESS_SESSION_SECRET
+#          (generate with: gated-access secrets)
+#        GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
+#        GITHUB_REDIRECT_URI=https://your-site/auth/callback
+#          (the frontend proxies /auth/* to the gate — see next.config.js)
+#        RESEND_API_KEY (when email.provider: resend)
+
+demo_mode: false
+
+identity:
+  provider: github      # real GitHub OAuth (GITHUB_CLIENT_ID/SECRET in .env)
+
+verify:
+  type: github_star     # unlocks when the user has starred the repo below
+  repo: NI3singh/AI-Resume-Updater
+  username: NI3singh    # only used if you switch to github_follow
+
+email:
+  provider: smtp        # Gmail SMTP — SMTP_* values come from .env
+  from_addr: ResumeTeX <aiml2.elaunch@gmail.com>
+
+storage:
+  backend: sqlite       # codes/sessions survive backend restarts
+  path: gated-access.db
+
+access_ttl_seconds: 86400   # one code unlocks the feature for 24 hours
+
+branding:
+  product: ResumeTeX
+  title: Unlock AI tailoring
+  subtitle: Complete one quick step and we'll email you an access code.
+  accent: "#d4af6a"

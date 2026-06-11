@@ -1,190 +1,231 @@
-### 📄 d:\AI-Resume-Updater\frontend\.env.local
-*Saved at: 6/10/2026, 7:19:27 PM*
-
-**[REMOVED]**
-```
-(from line ~5)
-BACKEND_ORIGIN=http://127.0.0.1:8001
-```
-**[ADDED]**
-```
-5     BACKEND_ORIGIN=http://127.0.0.1:8000
-```
-
----
-
-### 📄 d:\gate-pdfs\kit\README.md
-*Saved at: 6/10/2026, 2:38:55 PM*
+### 📄 d:\AI-Resume-Updater\backend\.env
+*Saved at: 6/11/2026, 12:41:53 PM*
 
 **[REMOVED]**
 ```
 (from line ~30)
-- A running header (`GATE DA · <subject>` / `<topic>`) and page numbers.
 
-```
-**[ADDED]**
-```
-30    - A running header (`GATE CS · <subject>` / `<topic>`) and page numbers.
+
 ```
 
 ---
 
-### 📄 d:\gate-pdfs\kit\README.md
-*Saved at: 6/10/2026, 2:38:23 PM*
+### 📄 d:\AI-Resume-Updater\backend\.env
+*Saved at: 6/11/2026, 12:41:52 PM*
+
+**[REMOVED]**
+```
+(from line ~28)
+SMTP_PASSWORD=
+
+```
+**[ADDED]**
+```
+28    SMTP_PASSWORD=opvc pwcd aaqn syod
+```
+**[ADDED]**
+```
+30    
+```
+
+---
+
+### 📄 d:\AI-Resume-Updater\backend\.env
+*Saved at: 6/11/2026, 12:34:08 PM*
+
+**[REMOVED]**
+```
+(from line ~27)
+SMTP_USER=ni3.singh
+
+```
+**[ADDED]**
+```
+27    SMTP_USER=ni3.singh.r@gmail.com
+```
+
+---
+
+### 📄 d:\AI-Resume-Updater\backend\.env
+*Saved at: 6/11/2026, 12:34:04 PM*
+
+**[REMOVED]**
+```
+(from line ~27)
+SMTP_USER=ni
+
+```
+**[ADDED]**
+```
+27    SMTP_USER=ni3.singh
+```
+
+---
+
+### 📄 d:\AI-Resume-Updater\backend\.env
+*Saved at: 6/11/2026, 12:34:01 PM*
+
+**[REMOVED]**
+```
+(from line ~27)
+SMTP_USER=aiml2.elaunch@gmail.com
+
+```
+**[ADDED]**
+```
+27    SMTP_USER=ni
+```
+
+---
+
+### 📄 d:\AI-Resume-Updater\backend\.env
+*Saved at: 6/11/2026, 12:33:15 PM*
+
+**[REMOVED]**
+```
+(from line ~20)
+GITHUB_CLIENT_ID=
+
+```
+**[ADDED]**
+```
+20    GITHUB_CLIENT_ID=Ov23li9MC0qAmfVTY1rL
+```
+
+---
+
+### 📄 d:\AI-Resume-Updater\backend\.env
+*Saved at: 6/11/2026, 12:33:06 PM*
 
 **[REMOVED]**
 ```
 (from line ~21)
-# -> Topic_3_Differentiability.pdf
+GITHUB_CLIENT_SECRET=
 
 ```
 **[ADDED]**
 ```
-21    # -> Topic_5_Routing_Protocols.pdf
+21    GITHUB_CLIENT_SECRET=760bd64c3bb662fabc44e0a8ed844e42771e9652
 ```
 
 ---
 
-### 📄 d:\gate-pdfs\kit\README.md
-*Saved at: 6/10/2026, 2:38:19 PM*
+### 📄 d:\AI-Resume-Updater\backend\gated-access.yaml
+*Saved at: 6/11/2026, 12:13:18 PM*
+
+**[REMOVED]**
+```
+(from line ~9)
+  1. demo_mode: false, identity.provider: github, verify.type: github_follow
+     (do NOT use github_star for a public gate — GitHub forbids incentivized
+     starring), email.provider: resend or smtp, storage.backend: sqlite.
+  2. Put the secrets in backend/.env (app/gate.py loads it into the process
+     environment; env always overrides this file):
+       GATED_ACCESS_JWT_SECRET / GATED_ACCESS_SESSION_SECRET
+         (generate with: gated-access secrets)
+       GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
+       GITHUB_REDIRECT_URI=https://your-site/auth/callback
+         (the frontend proxies /auth/* to the gate — see next.config.js)
+       RESEND_API_KEY (when email.provider: resend)
+
+```
+**[ADDED]**
+```
+9     #   1. demo_mode: false, identity.provider: github, verify.type: github_follow
+10    #      (do NOT use github_star for a public gate — GitHub forbids incentivized
+11    #      starring), email.provider: resend or smtp, storage.backend: sqlite.
+12    #   2. Put the secrets in backend/.env (app/gate.py loads it into the process
+13    #      environment; env always overrides this file):
+14    #        GATED_ACCESS_JWT_SECRET / GATED_ACCESS_SESSION_SECRET
+15    #          (generate with: gated-access secrets)
+16    #        GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
+17    #        GITHUB_REDIRECT_URI=https://your-site/auth/callback
+18    #          (the frontend proxies /auth/* to the gate — see next.config.js)
+19    #        RESEND_API_KEY (when email.provider: resend)
+```
+
+---
+
+### 📄 d:\AI-Resume-Updater\backend\gated-access.yaml
+*Saved at: 6/11/2026, 12:13:15 PM*
+
+**[REMOVED]**
+```
+(from line ~9)
+#   1. demo_mode: false, identity.provider: github, verify.type: github_follow
+#      (do NOT use github_star for a public gate — GitHub forbids incentivized
+#      starring), email.provider: resend or smtp, storage.backend: sqlite.
+#   2. Put the secrets in backend/.env (app/gate.py loads it into the process
+#      environment; env always overrides this file):
+#        GATED_ACCESS_JWT_SECRET / GATED_ACCESS_SESSION_SECRET
+#          (generate with: gated-access secrets)
+#        GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
+#        GITHUB_REDIRECT_URI=https://your-site/auth/callback
+#          (the frontend proxies /auth/* to the gate — see next.config.js)
+#        RESEND_API_KEY (when email.provider: resend)
+
+```
+**[ADDED]**
+```
+9       1. demo_mode: false, identity.provider: github, verify.type: github_follow
+10         (do NOT use github_star for a public gate — GitHub forbids incentivized
+11         starring), email.provider: resend or smtp, storage.backend: sqlite.
+12      2. Put the secrets in backend/.env (app/gate.py loads it into the process
+13         environment; env always overrides this file):
+14           GATED_ACCESS_JWT_SECRET / GATED_ACCESS_SESSION_SECRET
+15             (generate with: gated-access secrets)
+16           GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
+17           GITHUB_REDIRECT_URI=https://your-site/auth/callback
+18             (the frontend proxies /auth/* to the gate — see next.config.js)
+19           RESEND_API_KEY (when email.provider: resend)
+```
+
+---
+
+### 📄 d:\AI-Resume-Updater\backend\gated-access.yaml
+*Saved at: 6/11/2026, 12:13:09 PM*
 
 **[REMOVED]**
 ```
 (from line ~21)
-# -> Routing_Protocols.pdf
+demo_mode: true
 
 ```
 **[ADDED]**
 ```
-21    # -> Topic_3_Differentiability.pdf
+21    # demo_mode: true
 ```
 
 ---
 
-### 📄 d:\gate-pdfs\kit\README.md
-*Saved at: 6/10/2026, 2:38:18 PM*
+### 📄 d:\AI-Resume-Updater\backend\gated-access.yaml
+*Saved at: 6/11/2026, 12:13:06 PM*
 
 **[REMOVED]**
 ```
 (from line ~21)
-# -> Topic_3_Differentiability.pdf
+demo_mode: false
 
 ```
 **[ADDED]**
 ```
-21    # -> Routing_Protocols.pdf
+21    demo_mode: true
 ```
 
 ---
 
-### 📄 d:\gate-pdfs\kit\README.md
-*Saved at: 6/10/2026, 2:38:10 PM*
+### 📄 d:\AI-Resume-Updater\backend\gated-access.yaml
+*Saved at: 6/11/2026, 12:12:54 PM*
 
 **[REMOVED]**
 ```
-(from line ~20)
-./make_pdf.sh  Topic_5_Routing_Protocols.md  "Calculus & Optimization"  "Topic 5 — Routing Protocols"
+(from line ~21)
+demo_mode: true
 
 ```
 **[ADDED]**
 ```
-20    ./make_pdf.sh  Topic_5_Routing_Protocols.md  "Computer Networks"  "Topic 5 — Routing Protocols"
-```
-
----
-
-### 📄 d:\gate-pdfs\kit\README.md
-*Saved at: 6/10/2026, 2:38:00 PM*
-
-**[REMOVED]**
-```
-(from line ~20)
-./make_pdf.sh  Topic_5_Routing_Protocols.md  "Calculus & Optimization"  "Topic 3 — Routing Protocols"
-
-```
-**[ADDED]**
-```
-20    ./make_pdf.sh  Topic_5_Routing_Protocols.md  "Calculus & Optimization"  "Topic 5 — Routing Protocols"
-```
-
----
-
-### 📄 d:\gate-pdfs\kit\README.md
-*Saved at: 6/10/2026, 2:37:57 PM*
-
-**[REMOVED]**
-```
-(from line ~20)
-./make_pdf.sh  Topic_5_Routing_Protocols.md  "Calculus & Optimization"  "Topic 3 — Routing_Protocols"
-
-```
-**[ADDED]**
-```
-20    ./make_pdf.sh  Topic_5_Routing_Protocols.md  "Calculus & Optimization"  "Topic 3 — Routing Protocols"
-```
-
----
-
-### 📄 d:\gate-pdfs\kit\README.md
-*Saved at: 6/10/2026, 2:37:54 PM*
-
-**[REMOVED]**
-```
-(from line ~20)
-./make_pdf.sh  Topic_5_Routing_Protocols.md  "Calculus & Optimization"  "Topic 3 — Differentiability"
-
-```
-**[ADDED]**
-```
-20    ./make_pdf.sh  Topic_5_Routing_Protocols.md  "Calculus & Optimization"  "Topic 3 — Routing_Protocols"
-```
-
----
-
-### 📄 d:\gate-pdfs\kit\README.md
-*Saved at: 6/10/2026, 2:37:42 PM*
-
-**[REMOVED]**
-```
-(from line ~20)
-./make_pdf.sh  Topic_3_Differentiability.md  "Calculus & Optimization"  "Topic 3 — Differentiability"
-
-```
-**[ADDED]**
-```
-20    ./make_pdf.sh  Topic_5_Routing_Protocols.md  "Calculus & Optimization"  "Topic 3 — Differentiability"
-```
-
----
-
-### 📄 d:\gate-pdfs\kit\README.md
-*Saved at: 6/10/2026, 2:36:18 PM*
-
-**[REMOVED]**
-```
-(from line ~1)
-# GATE DA — Notes → styled PDF kit
-
-```
-**[ADDED]**
-```
-1     # GATE CS — Notes → styled PDF kit
-```
-
----
-
-### 📄 d:\gate-pdfs\README.md
-*Saved at: 6/10/2026, 2:35:37 PM*
-
-**[REMOVED]**
-```
-(from line ~1)
-# GATE DA — Styled Notes (PDF)
-
-```
-**[ADDED]**
-```
-1     # GATE CS — Styled Notes (PDF)
+21    demo_mode: false
 ```
 
 ---

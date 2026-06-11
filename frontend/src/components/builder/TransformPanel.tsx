@@ -9,8 +9,10 @@ import {
 } from 'lucide-react';
 import { ResumeData } from '@/lib/types';
 import { ApiError } from '@/lib/api';
+import { clearGateToken, gateCheckUnlocked } from '@/lib/gate';
 import { transformResume, JD_MAX_CHARS } from '@/lib/resumeTransform';
 import { normalizeResume } from '@/lib/resumeImport';
+import GateUnlock from '@/components/builder/GateUnlock';
 import { Spinner } from '@/components/ui/Spinner';
 
 interface TransformPanelProps {
@@ -51,6 +53,18 @@ export default function TransformPanel({ data, hasContent, onApply, onSaveBranch
   const [result, setResult]       = useState<ReviewData | null>(null);
   const [hintIndex, setHintIndex] = useState(0);
 
+  // Gated Access: tailoring is locked until the user holds a gate token that
+  // the SERVER accepts (a stored token can outlive a secret rotation).
+  // null = check in flight (avoids flashing the wrong state).
+  const [unlocked, setUnlocked]       = useState<boolean | null>(null);
+  const [gateExpired, setGateExpired] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    gateCheckUnlocked().then(ok => { if (active) setUnlocked(ok); });
+    return () => { active = false; };
+  }, []);
+
   // Branch-save sub-state (inside review).
   const [naming, setNaming]             = useState(false);
   const [branchName, setBranchName]     = useState('');
@@ -81,6 +95,14 @@ export default function TransformPanel({ data, hasContent, onApply, onSaveBranch
       setStage('review');
     } catch (err) {
       console.error('Resume transform failed:', err);
+      // Gate token missing/expired server-side — re-lock and show the unlock flow.
+      if (err instanceof ApiError && err.status === 403 && err.message.includes('GATE_LOCKED')) {
+        clearGateToken();
+        setGateExpired(true);
+        setUnlocked(false);
+        setStage('idle');
+        return;
+      }
       // Clear, actionable statuses (empty resume / AI not configured) show as-is;
       // raw server/LLM internals hide behind the friendly message.
       const showRaw = err instanceof ApiError && [400, 503].includes(err.status);
@@ -132,8 +154,21 @@ export default function TransformPanel({ data, hasContent, onApply, onSaveBranch
         </div>
       </div>
 
+      {/* Checking whether tailoring is already unlocked */}
+      {unlocked === null && (
+        <div className="py-6 text-center"><Spinner size={24} /></div>
+      )}
+
+      {/* Locked: walk the Gated Access unlock flow before showing the form */}
+      {unlocked === false && (
+        <GateUnlock
+          expired={gateExpired}
+          onUnlocked={() => { setUnlocked(true); setGateExpired(false); }}
+        />
+      )}
+
       {/* Form (idle / working — kept visible, disabled while working) */}
-      {(stage === 'idle' || working) && (
+      {unlocked === true && (stage === 'idle' || working) && (
         <div className="space-y-3">
           {!hasContent && (
             <div className="flex items-start gap-2 rounded-lg border border-gold/25 bg-gold/[0.06] px-3 py-2.5">

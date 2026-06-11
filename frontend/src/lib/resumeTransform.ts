@@ -6,6 +6,7 @@
 // untrusted shape-wise — callers run it through normalizeResume().
 
 import { api } from './api';
+import { getGateToken } from './gate';
 import { ResumeData } from './types';
 
 // Keep the textarea under the backend truncation limit (parse_text_limit=16000).
@@ -29,8 +30,12 @@ export async function transformResume(
 ): Promise<TransformResult> {
   // Custom sections never go to the LLM — the caller re-attaches them.
   const { custom: _custom, ...builtin } = data;
+  // Tailoring is gated: the server wants the Gated Access JWT and answers
+  // 403 GATE_LOCKED without one (the panel then shows the unlock flow).
+  const gateToken = getGateToken();
   return api<TransformResult>('/tools/transform', {
     method: 'POST',
+    headers: gateToken ? { 'X-Gate-Token': gateToken } : undefined,
     body: JSON.stringify({
       job_description: jobDescription,
       job_title: jobTitle,

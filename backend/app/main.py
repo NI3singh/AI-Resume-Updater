@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .database import init_db
+from .gate import gate_app
 from .routers import auth, resumes, tools
 
 
@@ -30,6 +31,10 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(resumes.router)
 app.include_router(tools.router)
+
+# Gated Access (action-gated unlock for AI tailoring) — its own sub-app with
+# its own session cookie; /tools/transform checks the JWT it issues.
+app.mount("/gate", gate_app)
 
 
 @app.get("/health", tags=["meta"])
