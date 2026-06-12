@@ -1,23 +1,25 @@
 """Application settings, loaded from environment / .env via pydantic-settings."""
 
+import os
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     # PostgreSQL connection (SQLAlchemy URL, psycopg 3 driver).
-    database_url: str = "postgresql+psycopg://postgres:elaunch123456789@localhost:5432/ai_resume_updater"
+    database_url: str = os.getenv("DATABASE_URL")
 
     # JWT signing.
-    jwt_secret: str = "change-me-in-env"
+    jwt_secret: str = os.getenv("JWT_SECRET")
     jwt_algorithm: str = "HS256"
     access_token_ttl_hours: int = 24 * 7  # 7 days
 
     # Comma-separated list of allowed browser origins for CORS.
-    frontend_origin: str = "http://127.0.0.1:3000,http://localhost:3000"
+    frontend_origin: str = os.getenv("FRONTEND_ORIGIN")
 
     # Add the Secure flag to the auth cookie (only when served over HTTPS).
-    cookie_secure: bool = False
+    cookie_secure: bool = os.getenv("COOKIE_SECURE") == "true"
 
     # External LaTeX compilation services (primary + fallback).
     latex_compile_url: str = "https://latex.ytotech.com/builds/sync"
@@ -26,7 +28,7 @@ class Settings(BaseSettings):
     # Nebius LLM (OpenAI-compatible endpoint) used by the resume Upload feature
     # to parse and verify uploaded documents. Leave the key blank to disable the
     # AI import cleanly (the parse/verify endpoints then return 503).
-    nebius_api_key: str = "v1.CmQKHHN0YXRpY2tleS1lMDBrZGV5cGo3NzAxOGVmeHASIXNlcnZpY2VhY2NvdW50LWUwMGp2cWQ0M2U4cmhhNDJ0eDIMCOL9oNEGEJnirMgCOgwI34C5nAcQwLjYhwJAAloDZTAw.AAAAAAAAAAGfSz71xUJPKJZK3Rk0c7F1G9wfQWQx403pVptwk973bMHM0LSCl-nyHR9UlBT3nHDXllGirPPUugom1F5QFEUC"
+    nebius_api_key: str = os.getenv("NEBIUS_API_KEY")
     nebius_base_url: str = "https://api.tokenfactory.us-central1.nebius.com/v1/"
     nebius_model: str = "MiniMaxAI/MiniMax-M2.5"
     nebius_max_tokens: int = 8192  # response token budget for parse/verify (0 = let server decide)
