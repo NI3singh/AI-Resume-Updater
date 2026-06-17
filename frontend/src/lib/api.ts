@@ -30,17 +30,42 @@ function buildInit(options: RequestInit): RequestInit {
   };
 }
 
+function looksLikeHtml(text: string): boolean {
+  const s = text.trimStart().slice(0, 64).toLowerCase();
+  return s.startsWith('<!doctype') || s.startsWith('<html');
+}
+
+/** User-facing message when the proxy or server returns an HTML error page. */
+function friendlyHtmlError(status: number): string {
+  if (status === 401) return 'Incorrect email or password.';
+  if (status === 409) return 'An account with this email already exists.';
+  if (status >= 500) {
+    return 'Could not reach the server. Make sure the backend is running (uvicorn on port 8000) and restart the Next dev server after changing .env.local.';
+  }
+  return 'Something went wrong. Please try again.';
+}
+
 async function errorFrom(res: Response): Promise<ApiError> {
   let payload: unknown = null;
   const raw = await res.text();
   if (raw) {
     try { payload = JSON.parse(raw); } catch { payload = raw; }
   }
+
+  if (typeof payload === 'string' && looksLikeHtml(payload)) {
+    return new ApiError(res.status, friendlyHtmlError(res.status));
+  }
+
   const detail =
     payload && typeof payload === 'object' && 'detail' in payload
       ? (payload as { detail: unknown }).detail
       : payload;
   let message = typeof detail === 'string' ? detail : res.statusText || 'Request failed';
+
+  if (typeof message === 'string' && looksLikeHtml(message)) {
+    message = friendlyHtmlError(res.status);
+  }
+
   // FastAPI validation errors (422) put a list of {loc, msg} objects in detail.
   if (Array.isArray(detail) && detail.length > 0) {
     const first = detail[0] as { msg?: unknown; loc?: unknown };

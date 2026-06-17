@@ -12,7 +12,8 @@ const nextConfig = {
   },
 
   async rewrites() {
-    const backend = process.env.BACKEND_ORIGIN ?? 'http://127.0.0.1:8000';
+    // Must be a single base URL — not a comma-separated CORS list (that's FRONTEND_ORIGIN on the backend).
+    const backend = (process.env.BACKEND_ORIGIN ?? 'http://127.0.0.1:8000').split(',')[0].trim();
     return [
       { source: '/backend-api/:path*', destination: `${backend}/:path*` },
     ];

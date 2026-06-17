@@ -152,12 +152,16 @@ export default function LoginPage() {
       }
       router.replace('/');
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
+      if (err instanceof ApiError && err.status === 401) {
+        setServerError('Incorrect email or password.');
+      } else if (err instanceof ApiError && err.status === 409) {
         setServerError('An account with this email already exists. Please log in instead.');
         setMode('login');
       } else if (err instanceof ApiError && err.status === 422) {
         // Backend-side validation (shouldn't be reachable past the inline checks).
         setServerError('Please double-check your email address and password.');
+      } else if (err instanceof ApiError && err.status >= 500) {
+        setServerError(err.message || 'Could not reach the server. Is the backend running on port 8000?');
       } else if (err instanceof ApiError) {
         setServerError(err.message);
       } else {
