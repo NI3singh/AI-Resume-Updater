@@ -1,0 +1,4 @@
+# Live-differential inputs (real resumes / job descriptions) — may contain PII.
+# Never commit anything here except this ignore file.
+*
+!.gitignore

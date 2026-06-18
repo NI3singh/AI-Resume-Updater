@@ -110,10 +110,35 @@ def _entry_label(section: str, entry: dict[str, Any]) -> str:
 
 _NUM_RE = re.compile(r"\d[\d,.]*")
 
+# Spelled-out cardinals, so a legitimate rephrase like "five engineers" ->
+# "5 engineers" isn't mistaken for a fabricated number. Deliberately conservative:
+#   - "one"/"a"/"an" are EXCLUDED — too common as articles; admitting them would
+#     widen the allow-set and let a fabricated "1" slip through.
+#   - ordinals ("second") and multipliers ("hundred"/"thousand") are EXCLUDED —
+#     they'd admit numbers the source never literally stated.
+#   - compounds are NOT combined: "twenty five" -> {20, 5}, never 25.
+_NUMBER_WORDS = {
+    "zero": "0", "two": "2", "three": "3", "four": "4", "five": "5",
+    "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+    "eleven": "11", "twelve": "12", "thirteen": "13", "fourteen": "14",
+    "fifteen": "15", "sixteen": "16", "seventeen": "17", "eighteen": "18",
+    "nineteen": "19", "twenty": "20", "thirty": "30", "forty": "40",
+    "fifty": "50", "sixty": "60", "seventy": "70", "eighty": "80", "ninety": "90",
+}
+_WORD_NUM_RE = re.compile(r"\b(" + "|".join(_NUMBER_WORDS) + r")\b", re.IGNORECASE)
+
 
 def _numbers_in(text: str) -> set[str]:
-    """Normalized numeric tokens in a text ('1,200.' -> '1200')."""
-    return {m.replace(",", "").rstrip(".") for m in _NUM_RE.findall(text or "")}
+    """Normalized numeric tokens in a text ('1,200.' -> '1200').
+
+    Returns both digit tokens and conservative spelled-out cardinals so that
+    "five" and "5" compare equal. This is the single shared extractor used for
+    both the source and the rewrite, so the comparison stays symmetric.
+    """
+    text = text or ""
+    nums = {m.replace(",", "").rstrip(".") for m in _NUM_RE.findall(text)}
+    nums |= {_NUMBER_WORDS[m.lower()] for m in _WORD_NUM_RE.findall(text)}
+    return nums
 
 
 def _entry_numbers(entry: dict[str, Any]) -> set[str]:

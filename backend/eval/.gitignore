@@ -1,0 +1,4 @@
+# Differential reports are generated from private (gitignored) résumé data and
+# aren't reproducible from committed code — keep them local. The benchmark report
+# (benchmark_report.md) IS reproducible (synthetic fixtures) and is committed.
+differential_report*.md
