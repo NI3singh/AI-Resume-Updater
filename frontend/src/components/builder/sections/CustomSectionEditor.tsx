@@ -7,6 +7,7 @@ import { Plus, Trash2, ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
 import { ResumeData, CustomFieldDef, CustomEntry, LinkValue, DateRangeValue, MarkValue } from '@/lib/types';
 import MonthYearPicker from '@/components/builder/MonthYearPicker';
 import { formatMark } from '@/lib/latexTemplate';
+import ReorderableList from '@/components/builder/ReorderableList';
 
 // Value-box placeholders for the Number / Marks field, per chosen format.
 const MARK_PLACEHOLDER: Record<string, string> = {
@@ -219,39 +220,39 @@ export default function CustomSectionEditor({ data, onChange, sectionId, onConfi
           </button>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          <AnimatePresence>
-            {section.entries.map((entry, idx) => (
-              <motion.div key={entry.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                className="border border-ink-700 rounded-xl overflow-hidden bg-ink-800">
-                <div className="flex items-center gap-2 px-3 py-2.5">
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}>
-                    <p className="text-xs font-medium text-ivory truncate">{entryTitle(entry, idx)}</p>
-                  </div>
-                  <button onClick={() => removeEntry(entry.id)} className="p-1 text-ivory-muted hover:text-crimson transition-colors"><Trash2 size={12} /></button>
-                  <button onClick={() => setExpanded(expanded === entry.id ? null : entry.id)} className="p-1 text-ivory-muted hover:text-ivory transition-colors">
-                    {expanded === entry.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  </button>
+        <ReorderableList
+          items={section.entries}
+          onReorder={(entries) => update({ entries })}
+          renderItem={(entry, idx, dragHandle) => (
+            <div className="border border-ink-700 rounded-xl overflow-hidden bg-ink-800">
+              <div className="flex items-center gap-2 px-3 py-2.5">
+                {dragHandle}
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}>
+                  <p className="text-xs font-medium text-ivory truncate">{entryTitle(entry, idx)}</p>
                 </div>
+                <button onClick={() => removeEntry(entry.id)} className="p-1 text-ivory-muted hover:text-crimson transition-colors"><Trash2 size={12} /></button>
+                <button onClick={() => setExpanded(expanded === entry.id ? null : entry.id)} className="p-1 text-ivory-muted hover:text-ivory transition-colors">
+                  {expanded === entry.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                </button>
+              </div>
 
-                <AnimatePresence>
-                  {expanded === entry.id && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
-                      className="border-t border-ink-700 overflow-hidden">
-                      <div className="p-3 flex flex-col gap-3">
-                        {section.fields.map(f => (
-                          <FieldInput key={f.id} field={f} value={entry.values[f.id]}
-                            onChange={v => setValue(entry.id, f.id, v)} />
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
+              <AnimatePresence>
+                {expanded === entry.id && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                    className="border-t border-ink-700 overflow-hidden">
+                    <div className="p-3 flex flex-col gap-3">
+                      {section.fields.map(f => (
+                        <FieldInput key={f.id} field={f} value={entry.values[f.id]}
+                          onChange={v => setValue(entry.id, f.id, v)} />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+        />
       )}
     </div>
   );

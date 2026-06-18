@@ -7,6 +7,7 @@ import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ResumeData, EducationEntry } from '@/lib/types';
 import MonthYearPicker from '@/components/builder/MonthYearPicker';
 import { formatScore } from '@/lib/latexTemplate';
+import ReorderableList from '@/components/builder/ReorderableList';
 
 interface Props { data: ResumeData; onChange: (d: ResumeData) => void; }
 
@@ -58,107 +59,107 @@ export default function EducationSection({ data, onChange }: Props) {
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <AnimatePresence>
-          {data.education.map((edu, idx) => (
-            <motion.div key={edu.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-              className="border border-ink-700 rounded-xl overflow-hidden bg-ink-800">
-              <div className="flex items-center gap-2 px-3 py-2.5">
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(expanded === edu.id ? null : edu.id)}>
-                  <p className="text-xs font-medium text-ivory truncate">{edu.institution || `Education ${idx + 1}`}</p>
-                  {edu.degree && <p className="text-[10px] text-ivory-muted truncate">{edu.degree}</p>}
-                </div>
-                <button onClick={() => remove(edu.id)} className="p-1 text-ivory-muted hover:text-crimson transition-colors"><Trash2 size={12} /></button>
-                <button onClick={() => setExpanded(expanded === edu.id ? null : edu.id)} className="p-1 text-ivory-muted hover:text-ivory transition-colors">
-                  {expanded === edu.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
+      <ReorderableList
+        items={data.education}
+        onReorder={(education) => onChange({ ...data, education })}
+        renderItem={(edu, idx, dragHandle) => (
+          <div className="border border-ink-700 rounded-xl overflow-hidden bg-ink-800">
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              {dragHandle}
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(expanded === edu.id ? null : edu.id)}>
+                <p className="text-xs font-medium text-ivory truncate">{edu.institution || `Education ${idx + 1}`}</p>
+                {edu.degree && <p className="text-[10px] text-ivory-muted truncate">{edu.degree}</p>}
               </div>
+              <button onClick={() => remove(edu.id)} className="p-1 text-ivory-muted hover:text-crimson transition-colors"><Trash2 size={12} /></button>
+              <button onClick={() => setExpanded(expanded === edu.id ? null : edu.id)} className="p-1 text-ivory-muted hover:text-ivory transition-colors">
+                {expanded === edu.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+            </div>
 
-              <AnimatePresence>
-                {expanded === edu.id && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
-                    className="border-t border-ink-700 overflow-hidden">
-                    <div className="p-3 flex flex-col gap-3">
+            <AnimatePresence>
+              {expanded === edu.id && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                  className="border-t border-ink-700 overflow-hidden">
+                  <div className="p-3 flex flex-col gap-3">
 
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Institution *</label>
-                        <input className="input-base" value={edu.institution}
-                          onChange={e => update(edu.id, { institution: e.target.value })}
-                          placeholder="University of California, Berkeley" />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Location</label>
-                        <input className="input-base" value={edu.location}
-                          onChange={e => update(edu.id, { location: e.target.value })}
-                          placeholder="Berkeley, CA" />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Grade / Score</label>
-                        <div className="flex gap-2">
-                          <select
-                            className="input-base !w-auto flex-shrink-0 cursor-pointer"
-                            value={edu.gpaFormat ?? ''}
-                            onChange={e => update(edu.id, { gpaFormat: e.target.value })}
-                          >
-                            <option value="CGPA">CGPA</option>
-                            <option value="GPA">GPA</option>
-                            <option value="Percentage">Percentage</option>
-                            <option value="Grade">Grade</option>
-                            <option value="">Custom</option>
-                          </select>
-                          <input
-                            className="input-base flex-1"
-                            value={edu.gpaLabel}
-                            onChange={e => update(edu.id, { gpaLabel: e.target.value })}
-                            placeholder={SCORE_PLACEHOLDER[edu.gpaFormat ?? ''] ?? '8.68 / 10'}
-                          />
-                        </div>
-                        {formatScore(edu.gpaFormat, edu.gpaLabel) && (
-                          <p className="text-[9px] font-mono text-ink-500 mt-1">Shows as: {formatScore(edu.gpaFormat, edu.gpaLabel)}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Degree *</label>
-                        <input className="input-base" value={edu.degree}
-                          onChange={e => update(edu.id, { degree: e.target.value })}
-                          placeholder="B.S. in Computer Science" />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Start Date</label>
-                          <MonthYearPicker value={edu.startDate}
-                            onChange={v => update(edu.id, { startDate: v })}
-                            placeholder="Aug 2019" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">End Date</label>
-                          <MonthYearPicker value={edu.endDate}
-                            onChange={v => update(edu.id, { endDate: v })}
-                            placeholder="May 2023" allowPresent />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Highlight (italic note)</label>
-                        <input className="input-base" value={edu.highlight}
-                          onChange={e => update(edu.id, { highlight: e.target.value })}
-                          placeholder="Graduated with honors; Dean's List all semesters" />
-                        <p className="text-[9px] font-mono text-ink-500 mt-1">Rendered in italics below the degree line</p>
-                      </div>
-
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Institution *</label>
+                      <input className="input-base" value={edu.institution}
+                        onChange={e => update(edu.id, { institution: e.target.value })}
+                        placeholder="University of California, Berkeley" />
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Location</label>
+                      <input className="input-base" value={edu.location}
+                        onChange={e => update(edu.id, { location: e.target.value })}
+                        placeholder="Berkeley, CA" />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Grade / Score</label>
+                      <div className="flex gap-2">
+                        <select
+                          className="input-base !w-auto flex-shrink-0 cursor-pointer"
+                          value={edu.gpaFormat ?? ''}
+                          onChange={e => update(edu.id, { gpaFormat: e.target.value })}
+                        >
+                          <option value="CGPA">CGPA</option>
+                          <option value="GPA">GPA</option>
+                          <option value="Percentage">Percentage</option>
+                          <option value="Grade">Grade</option>
+                          <option value="">Custom</option>
+                        </select>
+                        <input
+                          className="input-base flex-1"
+                          value={edu.gpaLabel}
+                          onChange={e => update(edu.id, { gpaLabel: e.target.value })}
+                          placeholder={SCORE_PLACEHOLDER[edu.gpaFormat ?? ''] ?? '8.68 / 10'}
+                        />
+                      </div>
+                      {formatScore(edu.gpaFormat, edu.gpaLabel) && (
+                        <p className="text-[9px] font-mono text-ink-500 mt-1">Shows as: {formatScore(edu.gpaFormat, edu.gpaLabel)}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Degree *</label>
+                      <input className="input-base" value={edu.degree}
+                        onChange={e => update(edu.id, { degree: e.target.value })}
+                        placeholder="B.S. in Computer Science" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Start Date</label>
+                        <MonthYearPicker value={edu.startDate}
+                          onChange={v => update(edu.id, { startDate: v })}
+                          placeholder="Aug 2019" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">End Date</label>
+                        <MonthYearPicker value={edu.endDate}
+                          onChange={v => update(edu.id, { endDate: v })}
+                          placeholder="May 2023" allowPresent />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Highlight (italic note)</label>
+                      <input className="input-base" value={edu.highlight}
+                        onChange={e => update(edu.id, { highlight: e.target.value })}
+                        placeholder="Graduated with honors; Dean's List all semesters" />
+                      <p className="text-[9px] font-mono text-ink-500 mt-1">Rendered in italics below the degree line</p>
+                    </div>
+
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+      />
     </div>
   );
 }
