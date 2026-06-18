@@ -1,10 +1,22 @@
-# Anti-Fabrication Guard — Evaluation
+# ResumeTeX — Evaluation Harness
 
-This folder benchmarks `app/transform_guard.py`, the deterministic layer that runs
-**after** the LLM tailors a résumé to a job description and strips anything the
-model invented. The goal of the eval is not to flatter the guard but to
-**characterize it honestly** — what it catches, what it provably cannot, and how
-often it wrongly blocks a legitimate edit.
+Honest, reproducible benchmarks for the two AI surfaces of the résumé app:
+
+1. **The anti-fabrication guard** (`app/transform_guard.py`) — the deterministic
+   layer that runs *after* the LLM tailors a résumé to a job description and strips
+   anything the model invented.
+2. **The import pipeline's hyperlink handling** (`app/routers/tools.py`) — recovering
+   the URLs behind a résumé's links and mapping each onto the right field.
+
+The goal throughout is not to flatter the code but to **characterize it honestly** —
+what works, what provably doesn't, and the limits of every number.
+
+---
+
+# Part 1 — Anti-fabrication guard
+
+`app/transform_guard.py` runs **after** the LLM tailors a résumé and strips anything
+the model invented.
 
 ## TL;DR results
 
@@ -67,24 +79,81 @@ Encoded as `xfail(strict=True)` tests so they fail loudly if behaviour ever chan
 Residual false-positive classes (also `xfail`): version strings (`2.0`↔`v2`),
 magnitude suffixes (`5,000`↔`5k`), and casefold-only skill matching (`Node.js`↔`NodeJS`).
 
+---
+
+# Part 2 — Import pipeline: hyperlink handling
+
+A résumé stores the URL behind a link as a PDF link annotation (or DOCX
+relationship) — invisible to plain-text extraction, which sees only the anchor text
+("Portfolio", "LinkedIn"). The pipeline recovers these and maps each onto the right
+`ResumeData` field. Both benchmarks run on **9 real résumés**.
+
+## 2A — Hyperlink recovery (deterministic — `run_link_benchmark.py`)
+
+| Metric | Result |
+|---|---|
+| Hyperlinks recovered | **70** across 9 résumés |
+| **Invisible to the text layer** (only a link annotation carried them) | **54 = 77%** |
+| Well-formed (scheme present) | 70 = 100% |
+| By type | 18 github-repo · 12 linkedin · 9 github-profile · 9 email · 2 credential · 20 portfolio/other |
+
+A naive text-only parser would drop the 77% entirely — including project repos,
+Power BI dashboards, Credly badges, and portfolio sites. Recall (links missed
+outright) was validated by manual inspection of the source PDFs; there is no second
+annotation parser used as an oracle.
+
+## 2B — URL → field-mapping accuracy (parse vs. parse+verify — `run_parse_accuracy.py`)
+
+Does each recovered URL land in the **correct** field? Ground truth = the URL-type
+mapping rules the pipeline's own spec defines (`linkedin → personal.linkedin`,
+`github repo → project.githubUrl`, `credly → certification.credentialUrl`, deployed
+app → `project.liveUrl`, …), so accuracy = conformance to that spec. Scored over the
+53 spec-mappable links (ambiguous ones — competitive-programming profiles, social
+posts, custom-domain deploys — are excluded; template résumés auto-skip).
+
+| field type | parse | parse+verify | n |
+|---|---|---|---|
+| personal.email | 9/9 | 8/9 | 9 |
+| personal.linkedin | 9/9 | 9/9 | 9 |
+| personal.github | 9/9 | 9/9 | 9 |
+| personal.website | 1/1 | 1/1 | 1 |
+| certification.credentialUrl | 2/2 | 2/2 | 2 |
+| project.githubUrl | 13/18 | 13/18 | 18 |
+| project.liveUrl (deployed apps) | 2/5 | 2/5 | 5 |
+| **Overall** | **45/53 = 85%** | 44/53 = 83% | 53 |
+
+Honest reading of the gaps:
+- **Contact / profile / credential / website links: 30/30 at parse** (29/30 after verify).
+- The 5 `githubUrl` misses are all **open-source PR/contribution links** to one
+  external repo (`…/pull/####`) — correctly *not* mapped as the candidate's own projects.
+- The 3 `liveUrl` misses are vercel/netlify deploys, 2 of which are portfolio sites
+  the spec rule conservatively expects as `liveUrl` — so **85% is a pessimistic floor**.
+- **The verify stage did not help** link routing (it regressed exactly one email and
+  improved none); its value is in correcting field *values* (dates, formats), not URLs.
+
 ## Running it
 
 ```bash
 # from backend/  (deterministic — no key/DB/network needed)
-python -m eval.run_benchmark
+python -m eval.run_benchmark                      # Part 1: guard benchmark
+python -m eval.run_link_benchmark                 # Part 2A: hyperlink recovery
 pytest -q --cov=app.transform_guard --cov-report=term-missing
 
-# live differential (needs NEBIUS_API_KEY in .env; inputs under data/, gitignored)
-python -m eval.build_cases                      # resume PDFs -> cases.json (parse pipeline)
-python -m eval.run_differential                 # production prompt, temp 0
-EVAL_MODE=naive python -m eval.run_differential # no-guardrails stress baseline
+# LLM-backed (need NEBIUS_API_KEY in .env; inputs under data/resume|jd, gitignored)
+python -m eval.build_cases                        # resume PDFs -> cases.json (parse pipeline)
+python -m eval.run_differential                   # Part 1: production prompt, temp 0
+EVAL_MODE=naive python -m eval.run_differential   # Part 1: no-guardrails stress baseline
+python -m eval.run_parse_accuracy                 # Part 2B: URL -> field mapping (parse + verify)
 ```
 
-Generated artifacts: `benchmark_report.md`, `differential_report_production.md`,
-`differential_report_naive.md` (aggregate only, PII-safe). Inputs and per-item
-fabrication details live under `data/` and are **gitignored** (real résumés = PII).
+Only `benchmark_report.md` (synthetic, reproducible) is committed. Everything derived
+from real résumés — `differential_report_*.md`, `link_benchmark_report.md`,
+`parse_accuracy_report.md`, all inputs, and per-item detail files — lives under
+`data/` and is **gitignored** (real résumés are PII).
 
 ## Résumé bullets these numbers support
+
+**Anti-fabrication guard (Part 1):**
 
 > Built a deterministic anti-fabrication guard for an LLM résumé-tailoring feature
 > (FastAPI): on a 27-case adversarial benchmark it blocked **100%** of injected
@@ -93,5 +162,13 @@ fabrication details live under `data/` and are **gitignored** (real résumés = 
 > up to **10 per résumé** when tailored to a mismatched role — while cutting the
 > guard's own false-positive rate **56% → 33%**; **100%** line coverage, 5 blind
 > spots documented.
+
+**Import pipeline / hyperlink handling (Part 2):**
+
+> Benchmarked a résumé-import pipeline on **9 real résumés**: recovered **70
+> hyperlinks, 77% invisible to plain-text extraction** (project repos, dashboards,
+> credential badges) by parsing PDF link annotations / DOCX relationships, then
+> mapped each to the correct structured field at **85% accuracy — 100% for
+> contact/profile/credential links** — quantifying both extraction and routing.
 
 (Shorter variants and the metrics list are in the project chat.)
