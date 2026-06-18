@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ResumeData, PublicationEntry } from '@/lib/types';
+import ReorderableList from '@/components/builder/ReorderableList';
 
 interface Props { data: ResumeData; onChange: (d: ResumeData) => void; }
 
@@ -46,74 +47,74 @@ export default function PublicationsSection({ data, onChange }: Props) {
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <AnimatePresence>
-          {data.publications.map((pub, idx) => (
-            <motion.div key={pub.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-              className="border border-ink-700 rounded-xl overflow-hidden bg-ink-800">
-              <div className="flex items-center gap-2 px-3 py-2.5">
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(expanded === pub.id ? null : pub.id)}>
-                  <p className="text-xs font-medium text-ivory truncate">{pub.title || `Publication ${idx + 1}`}</p>
-                  {pub.authors && <p className="text-[10px] text-ivory-muted truncate">{pub.authors}</p>}
-                </div>
-                <button onClick={() => remove(pub.id)} className="p-1 text-ivory-muted hover:text-crimson transition-colors"><Trash2 size={12} /></button>
-                <button onClick={() => setExpanded(expanded === pub.id ? null : pub.id)} className="p-1 text-ivory-muted hover:text-ivory transition-colors">
-                  {expanded === pub.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
+      <ReorderableList
+        items={data.publications}
+        onReorder={(publications) => onChange({ ...data, publications })}
+        renderItem={(pub, idx, dragHandle) => (
+          <div className="border border-ink-700 rounded-xl overflow-hidden bg-ink-800">
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              {dragHandle}
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(expanded === pub.id ? null : pub.id)}>
+                <p className="text-xs font-medium text-ivory truncate">{pub.title || `Publication ${idx + 1}`}</p>
+                {pub.authors && <p className="text-[10px] text-ivory-muted truncate">{pub.authors}</p>}
               </div>
+              <button onClick={() => remove(pub.id)} className="p-1 text-ivory-muted hover:text-crimson transition-colors"><Trash2 size={12} /></button>
+              <button onClick={() => setExpanded(expanded === pub.id ? null : pub.id)} className="p-1 text-ivory-muted hover:text-ivory transition-colors">
+                {expanded === pub.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+            </div>
 
-              <AnimatePresence>
-                {expanded === pub.id && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
-                    className="border-t border-ink-700 overflow-hidden">
-                    <div className="p-3 flex flex-col gap-3">
+            <AnimatePresence>
+              {expanded === pub.id && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                  className="border-t border-ink-700 overflow-hidden">
+                  <div className="p-3 flex flex-col gap-3">
 
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Paper Title *</label>
-                        <input className="input-base" value={pub.title}
-                          onChange={e => update(pub.id, { title: e.target.value })}
-                          placeholder="Efficient Deep Learning for Image Restoration: A Comparative Study" />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Authors *</label>
-                        <input className="input-base" value={pub.authors}
-                          onChange={e => update(pub.id, { authors: e.target.value })}
-                          placeholder="Jane Smith, Alex Johnson" />
-                        <p className="text-[9px] font-mono text-ink-500 mt-1">Wrap your name in **double asterisks** to bold it</p>
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Abstract</label>
-                        <textarea className="input-base min-h-[72px] resize-none text-[11px] leading-relaxed" value={pub.abstractText}
-                          onChange={e => update(pub.id, { abstractText: e.target.value })}
-                          placeholder="A short summary of the paper's key contributions and findings." />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Paper URL</label>
-                        <input className="input-base" value={pub.paperUrl}
-                          onChange={e => update(pub.id, { paperUrl: e.target.value })}
-                          placeholder="https://arxiv.org/abs/..." />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Link Label</label>
-                        <input className="input-base" value={pub.paperLinkLabel}
-                          onChange={e => update(pub.id, { paperLinkLabel: e.target.value })}
-                          placeholder="arXiv Pre-print, 2025" />
-                        <p className="text-[9px] font-mono text-ink-500 mt-1">The clickable text for the paper URL</p>
-                      </div>
-
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Paper Title *</label>
+                      <input className="input-base" value={pub.title}
+                        onChange={e => update(pub.id, { title: e.target.value })}
+                        placeholder="Efficient Deep Learning for Image Restoration: A Comparative Study" />
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Authors *</label>
+                      <input className="input-base" value={pub.authors}
+                        onChange={e => update(pub.id, { authors: e.target.value })}
+                        placeholder="Jane Smith, Alex Johnson" />
+                      <p className="text-[9px] font-mono text-ink-500 mt-1">Wrap your name in **double asterisks** to bold it</p>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Abstract</label>
+                      <textarea className="input-base min-h-[72px] resize-none text-[11px] leading-relaxed" value={pub.abstractText}
+                        onChange={e => update(pub.id, { abstractText: e.target.value })}
+                        placeholder="A short summary of the paper's key contributions and findings." />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Paper URL</label>
+                      <input className="input-base" value={pub.paperUrl}
+                        onChange={e => update(pub.id, { paperUrl: e.target.value })}
+                        placeholder="https://arxiv.org/abs/..." />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Link Label</label>
+                      <input className="input-base" value={pub.paperLinkLabel}
+                        onChange={e => update(pub.id, { paperLinkLabel: e.target.value })}
+                        placeholder="arXiv Pre-print, 2025" />
+                      <p className="text-[9px] font-mono text-ink-500 mt-1">The clickable text for the paper URL</p>
+                    </div>
+
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+      />
     </div>
   );
 }

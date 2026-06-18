@@ -1,10 +1,10 @@
 // src/components/builder/sections/Skills.tsx
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, X } from 'lucide-react';
 import { useState, KeyboardEvent } from 'react';
+import { Plus, Trash2, X } from 'lucide-react';
 import { ResumeData, SkillCategory } from '@/lib/types';
+import ReorderableList from '@/components/builder/ReorderableList';
 
 interface Props { data: ResumeData; onChange: (d: ResumeData) => void; }
 
@@ -86,66 +86,59 @@ export default function SkillsSection({ data, onChange }: Props) {
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <AnimatePresence>
-          {data.skills.map((skill) => (
-            <motion.div
-              key={skill.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="border border-ink-700 rounded-xl p-3 bg-ink-800"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <input
-                  className="input-base flex-1 text-xs font-semibold"
-                  value={skill.category}
-                  onChange={(e) => update(skill.id, { category: e.target.value })}
-                  placeholder="Category name (e.g. Languages)"
-                />
-                <button onClick={() => remove(skill.id)} className="p-1.5 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0">
-                  <Trash2 size={12} />
-                </button>
-              </div>
+      <ReorderableList
+        items={data.skills}
+        onReorder={(skills) => onChange({ ...data, skills })}
+        renderItem={(skill, _idx, dragHandle) => (
+          <div className="border border-ink-700 rounded-xl p-3 bg-ink-800">
+            <div className="flex items-center gap-2 mb-3">
+              {dragHandle}
+              <input
+                className="input-base flex-1 text-xs font-semibold"
+                value={skill.category}
+                onChange={(e) => update(skill.id, { category: e.target.value })}
+                placeholder="Category name (e.g. Languages)"
+              />
+              <button onClick={() => remove(skill.id)} className="p-1.5 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0">
+                <Trash2 size={12} />
+              </button>
+            </div>
 
-              {/* Skill chips */}
-              <div className="flex flex-wrap gap-1.5 mb-2.5">
-                {skill.items.map((item) => (
-                  <motion.span
-                    key={item}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-ink-700 border border-ink-600 rounded-md text-[10px] font-mono text-ivory-muted"
-                  >
-                    {item}
-                    <button onClick={() => removeItem(skill.id, item)} className="hover:text-crimson transition-colors">
-                      <X size={9} />
-                    </button>
-                  </motion.span>
-                ))}
-              </div>
-
-              {/* Add skill input */}
-              <div className="flex gap-1.5">
-                <input
-                  className="input-base flex-1 text-xs"
-                  value={inputs[skill.id] || ''}
-                  onChange={(e) => setInputs(prev => ({ ...prev, [skill.id]: e.target.value }))}
-                  onKeyDown={(e) => handleKeyDown(e, skill.id)}
-                  placeholder="Type skill, press Enter or comma..."
-                />
-                <button
-                  onClick={() => addItem(skill.id)}
-                  className="px-3 text-xs bg-gold/10 border border-gold/30 text-gold rounded-lg hover:bg-gold/20 transition-colors flex-shrink-0"
+            {/* Skill chips */}
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
+              {skill.items.map((item) => (
+                <span
+                  key={item}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-ink-700 border border-ink-600 rounded-md text-[10px] font-mono text-ivory-muted"
                 >
-                  Add
-                </button>
-              </div>
-              <p className="text-[9px] font-mono text-ink-500 mt-1.5">Press Enter or comma to add</p>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+                  {item}
+                  <button onClick={() => removeItem(skill.id, item)} className="hover:text-crimson transition-colors">
+                    <X size={9} />
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            {/* Add skill input */}
+            <div className="flex gap-1.5">
+              <input
+                className="input-base flex-1 text-xs"
+                value={inputs[skill.id] || ''}
+                onChange={(e) => setInputs(prev => ({ ...prev, [skill.id]: e.target.value }))}
+                onKeyDown={(e) => handleKeyDown(e, skill.id)}
+                placeholder="Type skill, press Enter or comma..."
+              />
+              <button
+                onClick={() => addItem(skill.id)}
+                className="px-3 text-xs bg-gold/10 border border-gold/30 text-gold rounded-lg hover:bg-gold/20 transition-colors flex-shrink-0"
+              >
+                Add
+              </button>
+            </div>
+            <p className="text-[9px] font-mono text-ink-500 mt-1.5">Press Enter or comma to add</p>
+          </div>
+        )}
+      />
     </div>
   );
 }

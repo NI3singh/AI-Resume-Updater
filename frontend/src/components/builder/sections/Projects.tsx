@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ResumeData, ProjectEntry } from '@/lib/types';
+import ReorderableList from '@/components/builder/ReorderableList';
 
 interface Props { data: ResumeData; onChange: (d: ResumeData) => void; }
 
@@ -52,88 +53,88 @@ export default function ProjectsSection({ data, onChange }: Props) {
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <AnimatePresence>
-          {data.projects.map((proj, idx) => (
-            <motion.div key={proj.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-              className="border border-ink-700 rounded-xl overflow-hidden bg-ink-800">
-              <div className="flex items-center gap-2 px-3 py-2.5">
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(expanded === proj.id ? null : proj.id)}>
-                  <p className="text-xs font-medium text-ivory truncate">{proj.name || `Project ${idx + 1}`}</p>
-                  {proj.techStack && <p className="text-[10px] text-ivory-muted truncate">{proj.techStack}</p>}
-                </div>
-                <button onClick={() => remove(proj.id)} className="p-1 text-ivory-muted hover:text-crimson transition-colors"><Trash2 size={12} /></button>
-                <button onClick={() => setExpanded(expanded === proj.id ? null : proj.id)} className="p-1 text-ivory-muted hover:text-ivory transition-colors">
-                  {expanded === proj.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
+      <ReorderableList
+        items={data.projects}
+        onReorder={(projects) => onChange({ ...data, projects })}
+        renderItem={(proj, idx, dragHandle) => (
+          <div className="border border-ink-700 rounded-xl overflow-hidden bg-ink-800">
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              {dragHandle}
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(expanded === proj.id ? null : proj.id)}>
+                <p className="text-xs font-medium text-ivory truncate">{proj.name || `Project ${idx + 1}`}</p>
+                {proj.techStack && <p className="text-[10px] text-ivory-muted truncate">{proj.techStack}</p>}
               </div>
+              <button onClick={() => remove(proj.id)} className="p-1 text-ivory-muted hover:text-crimson transition-colors"><Trash2 size={12} /></button>
+              <button onClick={() => setExpanded(expanded === proj.id ? null : proj.id)} className="p-1 text-ivory-muted hover:text-ivory transition-colors">
+                {expanded === proj.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+            </div>
 
-              <AnimatePresence>
-                {expanded === proj.id && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
-                    className="border-t border-ink-700 overflow-hidden">
-                    <div className="p-3 flex flex-col gap-3">
+            <AnimatePresence>
+              {expanded === proj.id && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                  className="border-t border-ink-700 overflow-hidden">
+                  <div className="p-3 flex flex-col gap-3">
 
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Project Name *</label>
-                        <input className="input-base" value={proj.name}
-                          onChange={e => update(proj.id, { name: e.target.value })}
-                          placeholder="Personal Portfolio Website" />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Tech Stack</label>
-                        <input className="input-base" value={proj.techStack}
-                          onChange={e => update(proj.id, { techStack: e.target.value })}
-                          placeholder="Next.js, Tailwind CSS" />
-                        <p className="text-[9px] font-mono text-ink-500 mt-1">Comma-separated, shown after | in the heading</p>
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">GitHub URL</label>
-                        <input className="input-base" value={proj.githubUrl}
-                          onChange={e => update(proj.id, { githubUrl: e.target.value })}
-                          placeholder="https://github.com/username/repo" />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Live URL (optional)</label>
-                        <input className="input-base" value={proj.liveUrl}
-                          onChange={e => update(proj.id, { liveUrl: e.target.value })}
-                          placeholder="https://myproject.onrender.com" />
-                        <p className="text-[9px] font-mono text-ink-500 mt-1">Leave blank to omit Live Link</p>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-[10px] text-ivory-muted uppercase tracking-wider">Bullet Points</label>
-                          <button onClick={() => update(proj.id, { bullets: [...proj.bullets, ''] })} className="text-[10px] text-gold hover:text-gold-light">+ Add</button>
-                        </div>
-                        <p className="text-[9px] font-mono text-ink-500 mb-2">Wrap a word in **double asterisks** for bold.</p>
-                        <div className="flex flex-col gap-1.5">
-                          {proj.bullets.map((b, bi) => (
-                            <div key={bi} className="bullet-item">
-                              <textarea className="input-base flex-1 min-h-[56px] resize-none text-[11px] leading-relaxed"
-                                value={b} onChange={e => updateBullet(proj.id, bi, e.target.value)}
-                                placeholder="Built a responsive web app serving 1,000+ monthly users" />
-                              {proj.bullets.length > 1 && (
-                                <button onClick={() => update(proj.id, { bullets: proj.bullets.filter((_, i) => i !== bi) })}
-                                  className="mt-2 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0"><Trash2 size={11} /></button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Project Name *</label>
+                      <input className="input-base" value={proj.name}
+                        onChange={e => update(proj.id, { name: e.target.value })}
+                        placeholder="Personal Portfolio Website" />
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Tech Stack</label>
+                      <input className="input-base" value={proj.techStack}
+                        onChange={e => update(proj.id, { techStack: e.target.value })}
+                        placeholder="Next.js, Tailwind CSS" />
+                      <p className="text-[9px] font-mono text-ink-500 mt-1">Comma-separated, shown after | in the heading</p>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">GitHub URL</label>
+                      <input className="input-base" value={proj.githubUrl}
+                        onChange={e => update(proj.id, { githubUrl: e.target.value })}
+                        placeholder="https://github.com/username/repo" />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Live URL (optional)</label>
+                      <input className="input-base" value={proj.liveUrl}
+                        onChange={e => update(proj.id, { liveUrl: e.target.value })}
+                        placeholder="https://myproject.onrender.com" />
+                      <p className="text-[9px] font-mono text-ink-500 mt-1">Leave blank to omit Live Link</p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider">Bullet Points</label>
+                        <button onClick={() => update(proj.id, { bullets: [...proj.bullets, ''] })} className="text-[10px] text-gold hover:text-gold-light">+ Add</button>
+                      </div>
+                      <p className="text-[9px] font-mono text-ink-500 mb-2">Wrap a word in **double asterisks** for bold.</p>
+                      <div className="flex flex-col gap-1.5">
+                        {proj.bullets.map((b, bi) => (
+                          <div key={bi} className="bullet-item">
+                            <textarea className="input-base flex-1 min-h-[56px] resize-none text-[11px] leading-relaxed"
+                              value={b} onChange={e => updateBullet(proj.id, bi, e.target.value)}
+                              placeholder="Built a responsive web app serving 1,000+ monthly users" />
+                            {proj.bullets.length > 1 && (
+                              <button onClick={() => update(proj.id, { bullets: proj.bullets.filter((_, i) => i !== bi) })}
+                                className="mt-2 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0"><Trash2 size={11} /></button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+      />
     </div>
   );
 }

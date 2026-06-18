@@ -1,9 +1,9 @@
 // src/components/builder/sections/Achievements.tsx
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2 } from 'lucide-react';
 import { ResumeData, AchievementItem } from '@/lib/types';
+import ReorderableList from '@/components/builder/ReorderableList';
 
 interface Props { data: ResumeData; onChange: (d: ResumeData) => void; }
 
@@ -41,11 +41,14 @@ export default function AchievementsSection({ data, onChange }: Props) {
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        <AnimatePresence>
-          {data.achievements.map((item, idx) => (
-            <motion.div key={item.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-              className="bullet-item">
+      <ReorderableList
+        items={data.achievements}
+        onReorder={(achievements) => onChange({ ...data, achievements })}
+        className="flex flex-col gap-2"
+        renderItem={(item, idx, dragHandle) => (
+          <div className="flex items-start gap-2">
+            {dragHandle}
+            <div className="bullet-item flex-1 min-w-0">
               <textarea
                 className="input-base flex-1 min-h-[56px] resize-none text-[11px] leading-relaxed"
                 value={item.text}
@@ -56,10 +59,10 @@ export default function AchievementsSection({ data, onChange }: Props) {
                 className="mt-2 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0">
                 <Trash2 size={11} />
               </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+            </div>
+          </div>
+        )}
+      />
     </div>
   );
 }

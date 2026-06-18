@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ResumeData, ExtracurricularEntry } from '@/lib/types';
 import MonthYearPicker from '@/components/builder/MonthYearPicker';
+import ReorderableList from '@/components/builder/ReorderableList';
 
 interface Props { data: ResumeData; onChange: (d: ResumeData) => void; }
 
@@ -53,87 +54,87 @@ export default function ExtracurricularSection({ data, onChange }: Props) {
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <AnimatePresence>
-          {data.extracurricular.map((entry, idx) => (
-            <motion.div key={entry.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-              className="border border-ink-700 rounded-xl overflow-hidden bg-ink-800">
-              <div className="flex items-center gap-2 px-3 py-2.5">
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}>
-                  <p className="text-xs font-medium text-ivory truncate">{entry.title || `Activity ${idx + 1}`}</p>
-                  {entry.organization && <p className="text-[10px] text-ivory-muted truncate">{entry.organization}</p>}
-                </div>
-                <button onClick={() => remove(entry.id)} className="p-1 text-ivory-muted hover:text-crimson transition-colors"><Trash2 size={12} /></button>
-                <button onClick={() => setExpanded(expanded === entry.id ? null : entry.id)} className="p-1 text-ivory-muted hover:text-ivory transition-colors">
-                  {expanded === entry.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
+      <ReorderableList
+        items={data.extracurricular}
+        onReorder={(extracurricular) => onChange({ ...data, extracurricular })}
+        renderItem={(entry, idx, dragHandle) => (
+          <div className="border border-ink-700 rounded-xl overflow-hidden bg-ink-800">
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              {dragHandle}
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}>
+                <p className="text-xs font-medium text-ivory truncate">{entry.title || `Activity ${idx + 1}`}</p>
+                {entry.organization && <p className="text-[10px] text-ivory-muted truncate">{entry.organization}</p>}
               </div>
+              <button onClick={() => remove(entry.id)} className="p-1 text-ivory-muted hover:text-crimson transition-colors"><Trash2 size={12} /></button>
+              <button onClick={() => setExpanded(expanded === entry.id ? null : entry.id)} className="p-1 text-ivory-muted hover:text-ivory transition-colors">
+                {expanded === entry.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+            </div>
 
-              <AnimatePresence>
-                {expanded === entry.id && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
-                    className="border-t border-ink-700 overflow-hidden">
-                    <div className="p-3 flex flex-col gap-3">
+            <AnimatePresence>
+              {expanded === entry.id && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                  className="border-t border-ink-700 overflow-hidden">
+                  <div className="p-3 flex flex-col gap-3">
 
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Title / Role *</label>
-                        <input className="input-base" value={entry.title}
-                          onChange={e => update(entry.id, { title: e.target.value })}
-                          placeholder="Volunteer Mentor" />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Organization *</label>
-                        <input className="input-base" value={entry.organization}
-                          onChange={e => update(entry.id, { organization: e.target.value })}
-                          placeholder="Local Coding Club, San Francisco" />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Start Date</label>
-                          <MonthYearPicker value={entry.startDate}
-                            onChange={v => update(entry.id, { startDate: v })}
-                            placeholder="Jan 2021" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">End Date</label>
-                          <MonthYearPicker value={entry.endDate}
-                            onChange={v => update(entry.id, { endDate: v })}
-                            placeholder="Dec 2021" allowPresent />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-[10px] text-ivory-muted uppercase tracking-wider">Bullet Points</label>
-                          <button onClick={() => update(entry.id, { bullets: [...entry.bullets, ''] })} className="text-[10px] text-gold hover:text-gold-light">+ Add</button>
-                        </div>
-                        <p className="text-[9px] font-mono text-ink-500 mb-2">Wrap a word in **double asterisks** for bold.</p>
-                        <div className="flex flex-col gap-1.5">
-                          {entry.bullets.map((b, bi) => (
-                            <div key={bi} className="bullet-item">
-                              <textarea className="input-base flex-1 min-h-[48px] resize-none text-[11px] leading-relaxed"
-                                value={b} onChange={e => updateBullet(entry.id, bi, e.target.value)}
-                                placeholder="Mentored 10+ students in web development fundamentals" />
-                              {entry.bullets.length > 1 && (
-                                <button onClick={() => update(entry.id, { bullets: entry.bullets.filter((_, i) => i !== bi) })}
-                                  className="mt-2 text-ivory-muted hover:text-crimson flex-shrink-0"><Trash2 size={11} /></button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Title / Role *</label>
+                      <input className="input-base" value={entry.title}
+                        onChange={e => update(entry.id, { title: e.target.value })}
+                        placeholder="Volunteer Mentor" />
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+
+                    <div>
+                      <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Organization *</label>
+                      <input className="input-base" value={entry.organization}
+                        onChange={e => update(entry.id, { organization: e.target.value })}
+                        placeholder="Local Coding Club, San Francisco" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">Start Date</label>
+                        <MonthYearPicker value={entry.startDate}
+                          onChange={v => update(entry.id, { startDate: v })}
+                          placeholder="Jan 2021" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider mb-1 block">End Date</label>
+                        <MonthYearPicker value={entry.endDate}
+                          onChange={v => update(entry.id, { endDate: v })}
+                          placeholder="Dec 2021" allowPresent />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-[10px] text-ivory-muted uppercase tracking-wider">Bullet Points</label>
+                        <button onClick={() => update(entry.id, { bullets: [...entry.bullets, ''] })} className="text-[10px] text-gold hover:text-gold-light">+ Add</button>
+                      </div>
+                      <p className="text-[9px] font-mono text-ink-500 mb-2">Wrap a word in **double asterisks** for bold.</p>
+                      <div className="flex flex-col gap-1.5">
+                        {entry.bullets.map((b, bi) => (
+                          <div key={bi} className="bullet-item">
+                            <textarea className="input-base flex-1 min-h-[48px] resize-none text-[11px] leading-relaxed"
+                              value={b} onChange={e => updateBullet(entry.id, bi, e.target.value)}
+                              placeholder="Mentored 10+ students in web development fundamentals" />
+                            {entry.bullets.length > 1 && (
+                              <button onClick={() => update(entry.id, { bullets: entry.bullets.filter((_, i) => i !== bi) })}
+                                className="mt-2 text-ivory-muted hover:text-crimson flex-shrink-0"><Trash2 size={11} /></button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+      />
     </div>
   );
 }
