@@ -434,3 +434,8 @@ def home():
     </body>
     </html>
     """
+
+@app.get("/health", tags=["meta"])
+def health():
+    return {
+        "status": "ok"}
