@@ -54,9 +54,9 @@ _LANDING_HTML = r"""<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500;1,9..144,600&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 
 <style>
-  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-  :root {
+    :root {
     --ink-950:    #08080A;
     --ink-900:    #0E0E12;
     --ink-800:    #16161C;
@@ -70,12 +70,12 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     --gold-light: #DFC070;
     --gold-dark:  #A07830;
     --jade:       #3AAFA9;
-  }
+    }
 
-  html { scroll-behavior: smooth; }
-  html, body { overflow-x: hidden; }
+    html { scroll-behavior: smooth; }
+    html, body { overflow-x: hidden; }
 
-  body {
+    body {
     min-height: 100vh;
     background: var(--ink-950);
     color: var(--ivory);
@@ -88,59 +88,59 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     justify-content: center;
     position: relative;
     padding: 48px 24px;
-  }
+    }
 
-  /* ── Live drifting LaTeX-glyph canvas (ports AmbientGlyphs) ── */
-  #glyphs {
+    /* ── Live drifting LaTeX-glyph canvas (ports AmbientGlyphs) ── */
+    #glyphs {
     position: fixed;
     inset: 0;
     z-index: 0;
     pointer-events: none;
-  }
+    }
 
-  /* ── Atmosphere: orbs + mesh + grid + watermark ── */
-  .atmosphere {
+    /* ── Atmosphere: orbs + mesh + grid + watermark ── */
+    .atmosphere {
     position: fixed;
     inset: 0;
     z-index: 1;
     overflow: hidden;
     pointer-events: none;
-  }
+    }
 
-  .orb {
+    .orb {
     position: absolute;
     border-radius: 50%;
     filter: blur(72px);
     will-change: transform;
-  }
-  .orb-gold {
+    }
+    .orb-gold {
     width: 680px; height: 680px;
     background: rgba(201,168,76,0.07);
     top: -180px; left: -200px;
-  }
-  .orb-jade {
+    }
+    .orb-jade {
     width: 520px; height: 520px;
     background: rgba(58,175,169,0.05);
     bottom: -140px; right: -160px;
-  }
+    }
 
-  .mesh {
+    .mesh {
     position: absolute; inset: 0;
     background: radial-gradient(60% 50% at 50% 42%, rgba(201,168,76,0.08), transparent 70%);
-  }
+    }
 
-  .grid {
+    .grid {
     position: absolute; inset: 0;
     opacity: 0.03;
     background-image:
-      linear-gradient(#C9A84C 1px, transparent 1px),
-      linear-gradient(90deg, #C9A84C 1px, transparent 1px);
+        linear-gradient(#C9A84C 1px, transparent 1px),
+        linear-gradient(90deg, #C9A84C 1px, transparent 1px);
     background-size: 72px 72px;
     -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, black, transparent 75%);
     mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, black, transparent 75%);
-  }
+    }
 
-  .watermark {
+    .watermark {
     position: absolute;
     top: 4rem; right: -2rem;
     font-family: 'Fraunces', Georgia, serif;
@@ -151,18 +151,18 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     font-size: clamp(13rem, 30vw, 26rem);
     user-select: none;
     animation: floaty 7s ease-in-out infinite;
-  }
+    }
 
-  /* ── Soft center backdrop so glyphs never fight the text ── */
-  .backdrop {
+    /* ── Soft center backdrop so glyphs never fight the text ── */
+    .backdrop {
     position: fixed; inset: 0;
     z-index: 2;
     pointer-events: none;
     background: radial-gradient(ellipse 52% 48% at 50% 50%, rgba(8,8,10,0.62), transparent 72%);
-  }
+    }
 
-  /* ── Grain overlay (mirrors .grain::before) ── */
-  .grain::after {
+    /* ── Grain overlay (mirrors .grain::before) ── */
+    .grain::after {
     content: '';
     position: fixed;
     inset: 0;
@@ -170,10 +170,10 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     pointer-events: none;
     opacity: 0.4;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-  }
+    }
 
-  /* ── Content ── */
-  .wrap {
+    /* ── Content ── */
+    .wrap {
     position: relative;
     z-index: 10;
     width: 100%;
@@ -182,19 +182,19 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     display: flex;
     flex-direction: column;
     align-items: center;
-  }
+    }
 
-  /* ── Logo lockup ── */
-  .logo {
+    /* ── Logo lockup ── */
+    .logo {
     display: inline-flex;
     align-items: center;
     gap: 10px;
     margin-bottom: 40px;
     text-decoration: none;
     user-select: none;
-  }
-  .logo svg { display: block; }
-  .logo-name {
+    }
+    .logo svg { display: block; }
+    .logo-name {
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     font-weight: 700;
     font-size: 1.55rem;
@@ -202,16 +202,16 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     line-height: 1;
     color: var(--ivory);
     white-space: nowrap;
-  }
-  .logo-name .tex { color: var(--gold); }
-  .logo-name .tex .e {
+    }
+    .logo-name .tex { color: var(--gold); }
+    .logo-name .tex .e {
     display: inline-block;
     transform: translateY(0.18em);
     font-size: 0.82em;
-  }
+    }
 
-  /* ── Status badge ── */
-  .badge {
+    /* ── Status badge ── */
+    .badge {
     display: inline-flex;
     align-items: center;
     gap: 9px;
@@ -226,25 +226,25 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     letter-spacing: 0.06em;
     text-transform: uppercase;
     margin-bottom: 30px;
-  }
-  .ping { position: relative; display: inline-flex; height: 7px; width: 7px; }
-  .ping .wave {
+    }
+    .ping { position: relative; display: inline-flex; height: 7px; width: 7px; }
+    .ping .wave {
     position: absolute; inset: 0;
     border-radius: 999px;
     background: var(--gold);
     opacity: 0.75;
     animation: ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
-  }
-  .ping .dot {
+    }
+    .ping .dot {
     position: relative;
     display: inline-flex;
     height: 7px; width: 7px;
     border-radius: 999px;
     background: var(--gold);
-  }
+    }
 
-  /* ── Heading ── */
-  h1 {
+    /* ── Heading ── */
+    h1 {
     font-family: 'Fraunces', Georgia, serif;
     font-optical-sizing: auto;
     font-weight: 600;
@@ -254,8 +254,8 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     color: var(--ivory);
     text-wrap: balance;
     margin-bottom: 22px;
-  }
-  h1 .shimmer {
+    }
+    h1 .shimmer {
     font-style: italic;
     font-weight: 500;
     background: linear-gradient(90deg, #C9A84C 0%, #F5F0E8 40%, #DFC070 60%, #C9A84C 100%);
@@ -265,10 +265,10 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     -webkit-text-fill-color: transparent;
     color: transparent;
     animation: shimmer 4s linear infinite;
-  }
+    }
 
-  /* ── Subtitle ── */
-  .subtitle {
+    /* ── Subtitle ── */
+    .subtitle {
     font-size: 1.0625rem;
     font-weight: 400;
     color: rgba(245,240,232,0.65);
@@ -276,27 +276,27 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     max-width: 440px;
     margin: 0 auto 38px;
     text-wrap: balance;
-  }
-  .subtitle strong { color: var(--ivory); font-weight: 600; }
+    }
+    .subtitle strong { color: var(--ivory); font-weight: 600; }
 
-  /* ── Hairline gold rule ── */
-  .rule {
+    /* ── Hairline gold rule ── */
+    .rule {
     width: 100%;
     max-width: 280px;
     height: 1px;
     background: linear-gradient(90deg, transparent, rgba(201,168,76,0.5), transparent);
     margin: 0 auto 38px;
-  }
+    }
 
-  /* ── Actions ── */
-  .actions {
+    /* ── Actions ── */
+    .actions {
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
     justify-content: center;
     margin-bottom: 48px;
-  }
-  .btn {
+    }
+    .btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -309,70 +309,87 @@ _LANDING_HTML = r"""<!DOCTYPE html>
     cursor: pointer;
     transition: transform .2s ease, background .2s ease, border-color .2s ease,
                 color .2s ease, box-shadow .2s ease;
-  }
-  .btn-primary {
+    }
+    .btn-primary {
     background: var(--gold);
     color: var(--ink-950);
     border: 1px solid var(--gold);
     box-shadow: 0 2px 12px rgba(201,168,76,0.25);
-  }
-  .btn-primary:hover {
+    }
+    .btn-primary:hover {
     background: var(--gold-light);
     border-color: var(--gold-light);
     transform: translateY(-2px);
     box-shadow: 0 6px 22px rgba(201,168,76,0.4);
-  }
-  .btn-primary .arr { transition: transform .2s ease; }
-  .btn-primary:hover .arr { transform: translateX(3px); }
-  .btn-ghost {
+    }
+    .btn-primary .arr { transition: transform .2s ease; }
+    .btn-primary:hover .arr { transform: translateX(3px); }
+    .btn-ghost {
     background: transparent;
     color: var(--ivory-muted);
     border: 1px solid var(--ink-600);
-  }
-  .btn-ghost:hover {
+    }
+    .btn-ghost:hover {
     border-color: rgba(201,168,76,0.3);
     color: var(--ivory);
     background: rgba(201,168,76,0.06);
     transform: translateY(-2px);
-  }
+    }
 
-  /* ── Footer note ── */
-  .note {
+    /* ── Footer note ── */
+    .note {
     font-size: 0.78rem;
     font-weight: 300;
     color: var(--ivory-dim);
     line-height: 1.7;
     max-width: 380px;
-  }
-  .note code {
+    }
+    .note code {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.72rem;
     color: rgba(201,168,76,0.7);
-  }
+    }
 
-  /* ── Entrance stagger ── */
-  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-  .logo     { animation: rise .6s ease both .05s; }
-  .badge    { animation: rise .6s ease both .14s; }
-  h1        { animation: rise .6s ease both .22s; }
-  .subtitle { animation: rise .6s ease both .32s; }
-  .rule     { animation: rise .6s ease both .40s; }
-  .actions  { animation: rise .6s ease both .46s; }
-  .note     { animation: rise .6s ease both .54s; }
+    /* ── Entrance stagger ── */
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    .logo     { animation: rise .6s ease both .05s; }
+    .badge    { animation: rise .6s ease both .14s; }
+    h1        { animation: rise .6s ease both .22s; }
+    .subtitle { animation: rise .6s ease both .32s; }
+    .rule     { animation: rise .6s ease both .40s; }
+    .actions  { animation: rise .6s ease both .46s; }
+    .note     { animation: rise .6s ease both .54s; }
 
-  @keyframes shimmer { from { background-position: -200% center; } to { background-position: 200% center; } }
-  @keyframes ping    { 75%, 100% { transform: scale(2.4); opacity: 0; } }
-  @keyframes floaty  { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    @keyframes shimmer { from { background-position: -200% center; } to { background-position: 200% center; } }
+    @keyframes ping    { 75%, 100% { transform: scale(2.4); opacity: 0; } }
+    @keyframes floaty  { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 
-  @media (max-width: 768px) { .watermark { display: none; } }
-  @media (max-width: 480px) {
+    @media (max-width: 768px) { .watermark { display: none; } }
+    @media (max-width: 480px) {
     .actions { flex-direction: column; align-items: stretch; width: 100%; max-width: 300px; }
     .btn { justify-content: center; }
-  }
+    }
 
-  @media (prefers-reduced-motion: reduce) {
+    @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
-  }
+    }
+    /* ─── Animated inline star ─── */
+    .star-anim {
+    display: inline-block;
+    vertical-align: -0.18em;
+    width: 1.05em;
+    height: 1.05em;
+    animation: star-spin 3.5s ease-in-out infinite;
+    filter: drop-shadow(0 0 3px rgba(201,168,76,0.6));
+    }
+
+    @keyframes star-spin {
+    0%   { transform: scale(1)    rotate(0deg);   filter: drop-shadow(0 0 2px rgba(201,168,76,0.5)); }
+    25%  { transform: scale(1.4)  rotate(72deg);  filter: drop-shadow(0 0 9px rgba(223,192,112,0.9)); }
+    50%  { transform: scale(1)    rotate(144deg); filter: drop-shadow(0 0 2px rgba(201,168,76,0.5)); }
+    75%  { transform: scale(1.4)  rotate(216deg); filter: drop-shadow(0 0 9px rgba(223,192,112,0.9)); }
+    100% { transform: scale(1)    rotate(360deg); filter: drop-shadow(0 0 2px rgba(201,168,76,0.5)); }
+    }
 </style>
 </head>
 <body class="grain">
@@ -437,7 +454,16 @@ _LANDING_HTML = r"""<!DOCTYPE html>
       The backend is live and running smoothly.
       <strong>Open the frontend to start building</strong> your perfectly
       typeset r&eacute;sum&eacute; &mdash; and if the project helps you,
-      a &#11088; on GitHub would mean a lot.
+      a <svg class="star-anim" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label="star">
+        <defs>
+            <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#E8CC7E"/>
+            <stop offset="50%" stop-color="#C9A84C"/>
+            <stop offset="100%" stop-color="#9A7826"/>
+            </linearGradient>
+        </defs>
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="url(#sg)"/>
+        </svg> on GitHub would mean a lot.
     </p>
 
     <div class="rule"></div>
