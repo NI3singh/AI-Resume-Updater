@@ -172,6 +172,86 @@ def _guard_bullets(
     return kept
 
 
+def _sources_numbers(sources: list[str] | None) -> set[str]:
+    """Numeric tokens found in user-provided grounding sources (e.g. a README)."""
+    nums: set[str] = set()
+    for s in sources or []:
+        if isinstance(s, str):
+            nums |= _numbers_in(s)
+    return nums
+
+
+def guard_unit(
+    kind: str,
+    original_entry: dict[str, Any] | None,
+    proposed: Any,
+    *,
+    sources: list[str] | None = None,
+) -> tuple[dict[str, Any], list[str]]:
+    """Guard a single tailored unit for the interactive section-by-section flow.
+
+    Scoped sibling of :func:`enforce_no_fabrication`: it validates ONE unit and
+    lets numbers come from the original entry **or** from ``sources`` (e.g. a
+    project README the user pasted), so grounded rewrites pass while invented
+    numbers are stripped.
+
+    - ``kind`` is ``"summary"`` or a list-section key (``"experience"``,
+      ``"projects"``, ``"extracurricular"``, ``"education"``, ``"skills"``).
+    - ``original_entry`` is the matching source unit; for the summary pass
+      ``{"summary": <old text>}``.
+    - ``proposed`` is the model's object for just this unit.
+
+    Returns ``(guarded_fields, warnings)`` containing ONLY the tailorable
+    fields. Immutable facts are never produced here — the caller keeps them from
+    the original, so they can't be corrupted.
+    """
+    warnings: list[str] = []
+    src = original_entry if isinstance(original_entry, dict) else {}
+    raw = proposed if isinstance(proposed, dict) else {}
+    allowed = _entry_numbers(src) | _sources_numbers(sources)
+    label = str(src.get(_LABEL_FIELDS.get(kind, "")) or "").strip() or f"this {kind} item"
+    out: dict[str, Any] = {}
+
+    if kind == "summary":
+        old = str(src.get("summary") or "")
+        text = raw.get("summary")
+        text = text.strip() if isinstance(text, str) else ""
+        if text and _numbers_in(text) - allowed:
+            warnings.append(
+                "Kept your original summary — the rewrite added numbers not in your resume or notes."
+            )
+            text = old
+        out["summary"] = text or old
+        return out, warnings
+
+    policy = _SECTION_POLICY.get(kind, {})
+    for field in policy.get("bullets", []):
+        out[field] = _guard_bullets(
+            _str_list(src.get(field)), raw.get(field), allowed, label, warnings,
+        )
+    for field in policy.get("text", []):
+        old = str(src.get(field) or "")
+        text = raw.get(field)
+        text = text.strip() if isinstance(text, str) else ""
+        if text and _numbers_in(text) - allowed:
+            warnings.append(
+                f"Kept the original {field} of {label} — the rewrite added numbers "
+                "not in your resume or notes."
+            )
+            text = old
+        out[field] = text or old
+    for field in policy.get("subset", []):
+        orig_items = _str_list(src.get(field))
+        allowed_items = {i.casefold(): i for i in orig_items}
+        kept_items: list[str] = []
+        for item in _str_list(raw.get(field)):
+            match = allowed_items.get(item.casefold())
+            if match is not None and match not in kept_items:
+                kept_items.append(match)
+        out[field] = kept_items if kept_items else orig_items
+    return out, warnings
+
+
 def enforce_no_fabrication(
     original: dict[str, Any], transformed: Any,
 ) -> tuple[dict[str, Any], list[str], list[str]]:

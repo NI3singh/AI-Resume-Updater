@@ -67,7 +67,9 @@ def _extract_json(text: str) -> dict[str, Any]:
     return obj
 
 
-def chat_json(system: str, user: str) -> dict[str, Any]:
+def chat_json(
+    system: str, user: str, *, max_tokens: int | None = None, temperature: float = 0.0,
+) -> dict[str, Any]:
     """Run a chat completion that must return a JSON object.
 
     OpenAI-compatible endpoints vary: some quietly return an **empty** message
@@ -75,17 +77,26 @@ def chat_json(system: str, user: str) -> dict[str, Any]:
     Plain mode is tried FIRST because for reasoning models (MiniMax-M2 et al.)
     JSON mode triggers far more "thinking" tokens — slower and prone to cold
     spikes — while the strict prompt already yields clean JSON without it.
-    We try progressively and take the first attempt with non-empty content:
+    We try progressively and take the first attempt with non-empty, **complete**
+    content:
         1. plain      + max_tokens   (fast path)
         2. JSON mode  + max_tokens   (fallback if plain returns empty / errors)
-        3. plain      (no max_tokens)
+        3. plain      (no max_tokens — recovers from a length-truncated attempt)
+
+    ``max_tokens`` overrides the configured budget for this call (small for the
+    per-unit Transform calls, larger for whole-document parse/verify).
+
+    Truncation guard: a response cut off mid-output (``finish_reason == "length"``)
+    is JSON that can't be trusted — silently parsing it is what turned ``2025``
+    into ``202``. Such an attempt is discarded so the next (larger/unbounded)
+    attempt can produce a complete object; if every attempt truncates we raise.
     """
     client = nebius_client()  # LLMNotConfigured propagates as-is.
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
-    mt = settings.nebius_max_tokens
+    mt = settings.nebius_max_tokens if max_tokens is None else max_tokens
     attempts: list[dict[str, Any]] = [
         {"max_tokens": mt},
         {"response_format": {"type": "json_object"}, "max_tokens": mt},
@@ -93,9 +104,10 @@ def chat_json(system: str, user: str) -> dict[str, Any]:
     ]
 
     content = ""
+    truncated = False
     last_error: Exception | None = None
     for opts in attempts:
-        kwargs: dict[str, Any] = {"model": settings.nebius_model, "temperature": 0, "messages": messages}
+        kwargs: dict[str, Any] = {"model": settings.nebius_model, "temperature": temperature, "messages": messages}
         if opts.get("max_tokens"):
             kwargs["max_tokens"] = opts["max_tokens"]
         if opts.get("response_format"):
@@ -109,10 +121,20 @@ def chat_json(system: str, user: str) -> dict[str, Any]:
             raise LLMError(f"LLM request failed: {exc}") from exc
         choice = resp.choices[0] if resp.choices else None
         content = (getattr(choice.message, "content", None) or "") if choice else ""
+        finish = getattr(choice, "finish_reason", None) if choice else None
+        if content.strip() and finish == "length":
+            # Output ran into the token ceiling — the JSON is incomplete. Drop it
+            # and let a later attempt (the last has no max_tokens) finish cleanly.
+            truncated = True
+            content = ""
+            continue
         if content.strip():
+            truncated = False
             break
 
     if not content.strip():
+        if truncated:
+            raise LLMError("The AI response was cut off because it was too long. Please try again.")
         if last_error is not None:
             raise LLMError(f"LLM request failed: {last_error}") from last_error
         raise LLMError("LLM returned an empty response.")
