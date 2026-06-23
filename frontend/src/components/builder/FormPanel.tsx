@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Reorder, motion, AnimatePresence } from 'framer-motion';
+import { Reorder, useDragControls, motion, AnimatePresence } from 'framer-motion';
 import {
   User, Briefcase, GraduationCap, Code2, FolderGit2,
   Trophy, Award, BookOpen, Activity, Shapes,
@@ -76,6 +76,7 @@ function SectionRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(section.label);
   const inputRef = useRef<HTMLInputElement>(null);
+  const controls = useDragControls();
   const Icon = SECTION_ICONS[section.id] || Shapes;
   const pct  = getCompleteness(data, section.id);
 
@@ -100,7 +101,8 @@ function SectionRow({
   return (
     <Reorder.Item
       value={section}
-      dragListener={!editing}
+      dragListener={false}
+      dragControls={controls}
       className={`group relative flex items-center gap-1.5 px-2 py-2 rounded-lg border transition-all duration-150 cursor-pointer select-none ${
         isActive
           ? 'bg-gold/10 border-gold/25'
@@ -114,8 +116,13 @@ function SectionRow({
         pct > 0    ? 'bg-gold/60' :
         'bg-transparent'
       }`} />
-      {/* Drag handle */}
-      <div className="flex-shrink-0 cursor-grab active:cursor-grabbing p-0.5 text-ivory-dim hover:text-ivory transition-colors ml-1">
+      {/* Drag handle — drag is started only from here (dragListener is off on the
+          row), so a click anywhere on the row body selects the section in one tap. */}
+      <div
+        className="flex-shrink-0 cursor-grab active:cursor-grabbing p-0.5 text-ivory-dim hover:text-ivory transition-colors ml-1 touch-none"
+        onPointerDown={(e) => { if (!editing) controls.start(e); }}
+        title="Drag to reorder"
+      >
         <GripVertical size={13} />
       </div>
 
@@ -380,13 +387,15 @@ export default function FormPanel({
       </div>
 
       {/* Section Content */}
+      {/* A keyed motion.div (no AnimatePresence "wait") replays its enter animation
+          on every switch: changing the key remounts the node, so the incoming
+          section always mounts. The previous AnimatePresence mode="wait" could get
+          stuck mid-exit and leave this panel blank until a full page reload. */}
       <div className="flex-1 overflow-y-auto px-4 pb-4">
-        <AnimatePresence mode="wait">
           <motion.div
             key={activeSection}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
           >
             {activeSection === 'personal'        && <PersonalInfoSection    data={data} onChange={onChange} />}
@@ -400,7 +409,6 @@ export default function FormPanel({
             {activeSection === 'publications'    && <PublicationsSection    data={data} onChange={onChange} />}
             {activeSection.startsWith('custom_') && <CustomSectionEditor    data={data} onChange={onChange} sectionId={activeSection} onConfigure={() => setConfigModal({ mode: 'edit', sectionId: activeSection })} />}
           </motion.div>
-        </AnimatePresence>
       </div>
 
       {configModal && (
