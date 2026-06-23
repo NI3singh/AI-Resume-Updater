@@ -108,3 +108,48 @@ class TransformOut(BaseModel):
     changes: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     match: MatchSummary = Field(default_factory=MatchSummary)
+
+
+# ── Interactive Transform (section-by-section, grounded tailoring) ───────────
+
+
+class TransformPlanIn(BaseModel):
+    job_description: str = Field(min_length=1)
+    job_title: str = Field(default="", max_length=200)
+    company: str = Field(default="", max_length=200)
+    data: dict[str, Any]
+
+
+class TransformStep(BaseModel):
+    kind: str                       # 'summary' | 'experience' | 'projects' | 'extracurricular' | 'education'
+    entry_id: str = ""              # '' for the summary step
+    section: str                    # owning section key ('personal' for summary)
+    label: str
+    asks_readme: bool = False       # project steps may request the project's README (Phase 2 UI)
+    asks_related_work: bool = False # experience steps may request JD-related work notes (Phase 2 UI)
+    recommend_change: bool = True
+    reason: str = ""
+
+
+class TransformPlanOut(BaseModel):
+    steps: list[TransformStep] = Field(default_factory=list)
+    missing_keywords: list[str] = Field(default_factory=list)
+
+
+class TransformSectionIn(BaseModel):
+    job_description: str = Field(min_length=1)
+    job_title: str = Field(default="", max_length=200)
+    company: str = Field(default="", max_length=200)
+    kind: str
+    entry: dict[str, Any] = Field(default_factory=dict)   # the single original unit (summary -> {"summary": "..."})
+    sources: list[str] = Field(default_factory=list)      # README / notes text — grounds allowed facts & numbers
+    instruction: str = Field(default="", max_length=2000) # optional user refine comment for a regeneration
+
+
+class TransformSectionOut(BaseModel):
+    proposal: dict[str, Any] = Field(default_factory=dict)   # tailorable fields only (bullets/text/summary/items)
+    rationale: str = ""
+    covered_keywords: list[str] = Field(default_factory=list)
+    missing_keywords: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    no_change_recommended: bool = False

@@ -4,7 +4,8 @@ All endpoints require an authenticated user.
 - POST /tools/extract-text : uploaded PDF/DOCX/TXT -> plain text (+ hyperlinks)
 - POST /tools/parse        : extracted text        -> structured ResumeData (LLM)
 - POST /tools/verify       : text + parsed data     -> corrected data + warnings (LLM)
-- POST /tools/transform    : resume + job description -> tailored resume (LLM + guard)
+- POST /tools/transform/plan    : resume + JD        -> ordered list of units to tailor
+- POST /tools/transform/section : one unit + JD (+ optional sources) -> guarded rewrite
 - POST /tools/compile      : LaTeX source           -> compiled PDF bytes
 
 Hyperlinks: in a PDF the URL behind a link is stored as a *link annotation*
@@ -30,16 +31,18 @@ from ..models import User
 from ..schemas import (
     CompileIn,
     ExtractOut,
-    MatchSummary,
     ParseIn,
     ParseOut,
-    TransformIn,
-    TransformOut,
+    TransformPlanIn,
+    TransformPlanOut,
+    TransformSectionIn,
+    TransformSectionOut,
+    TransformStep,
     VerifyIn,
     VerifyOut,
     VerifySummary,
 )
-from ..transform_guard import enforce_no_fabrication, merge_llm_report, prepare_for_llm
+from ..transform_guard import guard_unit, prepare_for_llm
 
 router = APIRouter(prefix="/tools", tags=["tools"])
 
@@ -119,6 +122,10 @@ VERIFY_SYSTEM = (
     "}\nNo markdown, no code fences, no commentary."
 )
 
+# NOTE: TRANSFORM_SYSTEM is the legacy one-shot whole-resume prompt. The live
+# app no longer uses it (replaced by the interactive per-unit flow below), but
+# the evaluation harness (backend/eval/run_differential.py) imports it to study
+# the raw-vs-guarded behaviour — keep it defined.
 TRANSFORM_SYSTEM = (
     "You are a resume tailoring assistant. You are given a candidate's resume as "
     "structured JSON — every entry carries an \"id\" field — and a target job "
@@ -155,6 +162,45 @@ TRANSFORM_SYSTEM = (
     '    "missing_keywords": [JD requirements the resume does NOT show - be honest, do NOT add them to the resume]\n'
     "  }\n"
     "}\nNo markdown, no code fences, no commentary."
+)
+
+# Interactive Transform: tailor ONE unit at a time. The model only ever emits
+# the small editable piece (bullets / a text field / the summary) — never the
+# whole resume and never immutable facts — which removes both the truncation and
+# the verbatim-echo corruption of the old one-shot transform.
+SECTION_SYSTEM = (
+    "You are a precise resume bullet editor. You are given ONE unit of a "
+    "candidate's resume and a target job description (JD). Rephrase ONLY the "
+    "editable text of this unit to foreground what matters for the JD.\n\n"
+    "STRICT RULES:\n"
+    "- Use ONLY facts already present in the provided unit and in any SOURCES the "
+    "user pasted (e.g. a project README). NEVER invent skills, tools, employers, "
+    "outcomes, metrics, or dates.\n"
+    "- NEVER introduce a number, percentage, metric, or date that is not in the "
+    "unit or the SOURCES.\n"
+    "- You may reorder, merge, sharpen, or drop a bullet that is irrelevant to "
+    "this JD. Use the JD's terminology only where the unit genuinely shows it.\n"
+    "- Do NOT restate names, companies, roles, dates, URLs, or tech-stack names — "
+    "those are fixed elsewhere; edit only the wording of the content.\n"
+    "- Keep each bullet truthful, specific, and concise.\n"
+    "- A USER CHANGE REQUEST (when present) is your TOP priority for HOW to "
+    "rewrite — length, wording, emphasis, terminology, ordering. You MUST visibly "
+    "apply it and produce a genuinely DIFFERENT result from before. The only "
+    "limit is truth: never invent facts or numbers to satisfy it; if it asks for "
+    "something the unit and SOURCES don't support, apply the rest and omit that part.\n\n"
+    "Return ONLY a JSON object (no markdown, no commentary) with the ONE content "
+    "key that matches the unit, plus the metadata keys:\n"
+    "{\n"
+    '  "bullets": ["..."],   // experience / projects / extracurricular units\n'
+    '  "text": "...",        // an education "highlight" unit\n'
+    '  "summary": "...",     // the personal summary unit\n'
+    '  "items": ["..."],     // a skills unit (reorder/trim only - no new items)\n'
+    '  "rationale": "one short sentence on what you changed and why",\n'
+    '  "covered_keywords": ["JD terms this unit genuinely demonstrates"],\n'
+    '  "missing_keywords": ["JD terms this unit does NOT show - do not add them"],\n'
+    '  "no_change_recommended": false\n'
+    "}\n"
+    "Include only the single content key for this unit's kind."
 )
 
 
@@ -369,8 +415,104 @@ def verify_resume(payload: VerifyIn, current_user: User = Depends(get_current_us
     return VerifyOut(data=data, warnings=warnings, summary=summary)
 
 
-@router.post("/transform", response_model=TransformOut)
-def transform_resume(payload: TransformIn, current_user: User = Depends(get_current_user)) -> TransformOut:
+# Units the interactive Transform can tailor (summary + the text-bearing sections).
+_TAILORABLE_KINDS = {"summary", "experience", "projects", "extracurricular", "education", "skills"}
+
+
+def _clean_keywords(value: object, limit: int = 20) -> list[str]:
+    """De-duplicated, trimmed, capped list of keyword strings from LLM output."""
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for k in value:
+        s = str(k).strip()
+        if s and s not in out:
+            out.append(s)
+        if len(out) >= limit:
+            break
+    return out
+
+
+# Plan enrichment: a small metadata-only LLM pass that flags which units are
+# worth tailoring for this JD (so the wizard can suggest "skip" for ones that
+# already fit) and reports the résumé's honest gaps. No rewritten text here, so
+# it's cheap and can't truncate.
+PLAN_SYSTEM = (
+    "You are a resume tailoring planner. You are given a target job description "
+    "(JD) and a list of resume UNITS — each with an index, kind, label, and a "
+    "short preview of its current content. For each unit, decide whether it is "
+    "worth tailoring for THIS job.\n\n"
+    "Return ONLY a JSON object (no markdown, no commentary):\n"
+    "{\n"
+    '  "units": [ { "i": <index>, "recommend_change": true, "reason": "<= 12 words why" } ],\n'
+    '  "missing_keywords": ["JD requirements the resume as a whole does not show"]\n'
+    "}\n"
+    "Set recommend_change=false when a unit is already well aligned with the JD, "
+    "or is irrelevant to it, so the user can safely skip it. Keep each reason "
+    "short and concrete. Be honest in missing_keywords and NEVER suggest adding "
+    "them to the resume."
+)
+
+
+def _unit_preview(kind: str, entry: dict, limit: int = 200) -> str:
+    """A short, single-line snapshot of a unit's current content for the planner."""
+    if kind == "summary":
+        text = str(entry.get("summary") or "")
+    elif kind == "education":
+        text = str(entry.get("highlight") or "")
+    else:
+        bullets = [str(b) for b in (entry.get("bullets") or []) if isinstance(b, (str, int, float))]
+        text = " · ".join(bullets)
+    return " ".join(text.split())[:limit]
+
+
+def _enrich_plan(
+    steps: list[TransformStep], previews: list[str], jd: str, job_title: str, company: str,
+) -> list[str]:
+    """Best-effort: ask the LLM which units to tailor + the JD gaps. Mutates
+    ``steps`` in place (recommend_change/reason) and returns missing_keywords.
+    Any LLM failure leaves the deterministic plan (all recommend_change=True)."""
+    if not steps:
+        return []
+    units = [
+        {"i": k, "kind": s.kind, "label": s.label, "preview": previews[k]}
+        for k, s in enumerate(steps)
+    ]
+    user_msg = (
+        f"JOB TITLE: {job_title.strip() or '(not provided)'}\n"
+        f"COMPANY: {company.strip() or '(not provided)'}\n\n"
+        "JOB DESCRIPTION:\n" + jd + "\n\n"
+        "RESUME UNITS (JSON):\n" + json.dumps(units, ensure_ascii=False)
+    )
+    try:
+        result = chat_json(PLAN_SYSTEM, user_msg, max_tokens=2048)
+    except (LLMError, LLMNotConfigured):
+        return []  # planning is optional — the deterministic plan still works
+
+    raw_units = result.get("units")
+    if isinstance(raw_units, list):
+        for u in raw_units:
+            if not isinstance(u, dict):
+                continue
+            try:
+                idx = int(u.get("i"))
+            except (TypeError, ValueError):
+                continue
+            if 0 <= idx < len(steps):
+                steps[idx].recommend_change = bool(u.get("recommend_change", True))
+                reason = str(u.get("reason") or "").strip()
+                if reason:
+                    steps[idx].reason = reason[:140]
+    return _clean_keywords(result.get("missing_keywords"))
+
+
+@router.post("/transform/plan", response_model=TransformPlanOut)
+def transform_plan(
+    payload: TransformPlanIn, current_user: User = Depends(get_current_user),
+) -> TransformPlanOut:
+    """Return the ordered list of résumé units the wizard will tailor, one at a
+    time, annotated with JD relevance. The actual rewriting happens per-unit in
+    /transform/section."""
     present = _sections_present(payload.data)
     if not present or present == ["personal"]:
         raise HTTPException(
@@ -378,38 +520,113 @@ def transform_resume(payload: TransformIn, current_user: User = Depends(get_curr
             detail="Your resume is empty — add some content before tailoring it.",
         )
 
-    jd = payload.job_description[: settings.parse_text_limit]
-    original = prepare_for_llm(payload.data)
-    user_msg = (
-        f"JOB TITLE: {payload.job_title.strip() or '(not provided)'}\n"
-        f"COMPANY: {payload.company.strip() or '(not provided)'}\n\n"
-        "JOB DESCRIPTION:\n"
-        + jd
-        + "\n\nRESUME JSON (each entry has an \"id\" — preserve them exactly):\n"
-        + json.dumps(original, ensure_ascii=False)
-    )
+    prepared = prepare_for_llm(payload.data)
+    steps: list[TransformStep] = []
+    previews: list[str] = []
 
+    personal = prepared.get("personal") or {}
+    summary = personal.get("summary")
+    if isinstance(summary, str) and summary.strip():
+        steps.append(TransformStep(
+            kind="summary", entry_id="", section="personal", label="Professional Summary",
+        ))
+        previews.append(_unit_preview("summary", personal))
+
+    for section, label_field, noun in [
+        ("experience", "company", "Experience"),
+        ("projects", "name", "Project"),
+        ("extracurricular", "title", "Activity"),
+    ]:
+        for e in prepared.get(section) or []:
+            if not isinstance(e, dict):
+                continue
+            label = str(e.get(label_field) or "").strip() or noun
+            steps.append(TransformStep(
+                kind=section, entry_id=str(e.get("id") or ""), section=section, label=label,
+                asks_readme=(section == "projects"),
+                asks_related_work=(section == "experience"),
+            ))
+            previews.append(_unit_preview(section, e))
+
+    for e in prepared.get("education") or []:
+        if isinstance(e, dict) and str(e.get("highlight") or "").strip():
+            label = str(e.get("institution") or "").strip() or "Education"
+            steps.append(TransformStep(
+                kind="education", entry_id=str(e.get("id") or ""), section="education", label=label,
+            ))
+            previews.append(_unit_preview("education", e))
+
+    missing = _enrich_plan(
+        steps, previews, payload.job_description[: settings.parse_text_limit],
+        payload.job_title, payload.company,
+    )
+    return TransformPlanOut(steps=steps, missing_keywords=missing)
+
+
+@router.post("/transform/section", response_model=TransformSectionOut)
+def transform_section(
+    payload: TransformSectionIn, current_user: User = Depends(get_current_user),
+) -> TransformSectionOut:
+    """Tailor ONE résumé unit to the JD. The model only sees (and only returns)
+    this unit's editable text, so it can't truncate or corrupt the rest of the
+    résumé; the guard then strips any number not present in the unit or in the
+    user-provided sources (e.g. a pasted README)."""
+    if payload.kind not in _TAILORABLE_KINDS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown unit kind.")
+
+    jd = payload.job_description[: settings.parse_text_limit]
+    sources = [
+        s[: settings.parse_text_limit]
+        for s in payload.sources
+        if isinstance(s, str) and s.strip()
+    ]
+    instruction = payload.instruction.strip()[: settings.parse_text_limit]
+
+    # The change request is placed BOTH up top and at the very end — for the
+    # summary step the grounding "SOURCES" block is the whole résumé, so an
+    # instruction tucked only at the bottom would get buried.
+    header = (
+        f"JOB TITLE: {payload.job_title.strip() or '(not provided)'}\n"
+        f"COMPANY: {payload.company.strip() or '(not provided)'}\n"
+        f"UNIT KIND: {payload.kind}\n"
+    )
+    if instruction:
+        header += (
+            "\n*** USER CHANGE REQUEST (top priority — you MUST apply this and "
+            f"return a different result, without inventing facts): {instruction}\n"
+        )
+
+    user_msg = (
+        header
+        + "\nJOB DESCRIPTION:\n" + jd
+        + "\n\nTHIS RESUME UNIT (JSON):\n" + json.dumps(payload.entry, ensure_ascii=False)
+    )
+    if sources:
+        user_msg += (
+            "\n\nSOURCES the user provided — facts and numbers appearing here are "
+            "allowed in the rewrite:\n" + "\n\n---\n\n".join(sources)
+        )
+    if instruction:
+        user_msg += f"\n\nREMINDER — apply the user's change request above: {instruction}"
+
+    # A little randomness so a regeneration (especially with a change request)
+    # yields a genuinely different, instruction-following result rather than the
+    # identical output a reasoning model returns at temperature 0.
     try:
-        result = chat_json(TRANSFORM_SYSTEM, user_msg)
+        result = chat_json(SECTION_SYSTEM, user_msg, max_tokens=4096, temperature=0.6)
     except LLMNotConfigured as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except LLMError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
-    data = result.get("data")
-    if not isinstance(data, dict):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="The AI returned an unusable result — please try again.",
-        )
-
-    guarded, warnings, computed_changes = enforce_no_fabrication(original, data)
-    changes, covered, missing = merge_llm_report(guarded, result, computed_changes)
-    return TransformOut(
-        data=guarded,
-        changes=changes,
+    guarded, warnings = guard_unit(payload.kind, payload.entry, result, sources=sources)
+    return TransformSectionOut(
+        proposal=guarded,
+        rationale=str(result.get("rationale") or "").strip(),
+        covered_keywords=_clean_keywords(result.get("covered_keywords")),
+        missing_keywords=_clean_keywords(result.get("missing_keywords")),
         warnings=warnings,
-        match=MatchSummary(covered_keywords=covered, missing_keywords=missing),
+        no_change_recommended=bool(result.get("no_change_recommended")),
     )
 
 

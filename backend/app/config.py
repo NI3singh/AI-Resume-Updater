@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     nebius_api_key: str = os.getenv("NEBIUS_API_KEY")
     nebius_base_url: str = "https://api.tokenfactory.us-central1.nebius.com/v1/"
     nebius_model: str = "MiniMaxAI/MiniMax-M2.5"
-    nebius_max_tokens: int = 8192  # response token budget for parse/verify (0 = let server decide)
+    nebius_max_tokens: int = 16384  # response token budget for parse/verify/transform (0 = let server decide)
 
     # Resume upload limits.
     upload_max_bytes: int = 5 * 1024 * 1024  # 5 MB max upload
