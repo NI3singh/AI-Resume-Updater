@@ -11,7 +11,7 @@ from ..config import settings
 from ..database import get_db
 from ..deps import get_current_user
 from ..models import AuthSession, Resume, User, UserProfile
-from ..schemas import LoginIn, SignupIn, UserOut
+from ..schemas import LoginIn, ProfileUpdateIn, SignupIn, UserOut
 from ..security import (
     COOKIE_NAME,
     create_access_token,
@@ -55,7 +55,16 @@ def _user_out(user: User) -> UserOut:
         id=user.id,
         email=user.email,
         display_name=user.profile.display_name if user.profile else None,
+        github_username=user.profile.github_username if user.profile else None,
     )
+
+
+def _normalize_github_username(value: str) -> str:
+    """Accept a handle, '@handle', or a github.com/<handle> URL -> bare handle."""
+    gh = value.strip().lstrip("@")
+    if "github.com/" in gh:
+        gh = gh.split("github.com/", 1)[1]
+    return gh.strip("/").split("/")[0].split("?")[0]
 
 
 @router.post("/signup", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -131,4 +140,31 @@ def logout(
 
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)) -> UserOut:
+    return _user_out(current_user)
+
+
+@router.patch("/me", response_model=UserOut)
+def update_me(
+    payload: ProfileUpdateIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserOut:
+    """Update account profile fields (display name, GitHub handle). Only the
+    fields actually present in the request are changed; an empty string clears."""
+    profile = current_user.profile
+    if profile is None:
+        profile = UserProfile(user_id=current_user.id)
+        db.add(profile)
+        current_user.profile = profile
+
+    fields = payload.model_dump(exclude_unset=True)
+    if "display_name" in fields:
+        dn = (fields["display_name"] or "").strip()
+        profile.display_name = dn or None
+    if "github_username" in fields:
+        gh = _normalize_github_username(fields["github_username"] or "")
+        profile.github_username = gh or None
+
+    db.commit()
+    db.refresh(current_user)
     return _user_out(current_user)

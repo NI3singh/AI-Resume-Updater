@@ -3,12 +3,13 @@
 
 import { useState, useEffect, useCallback, useRef, type MouseEvent as ReactMouseEvent } from 'react';
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Download, FileCode, Eye,
   Zap, Copy, Check, Save, LogOut, CloudOff, Cloud,
-  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine, Target,
+  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine, Target, UserCircle,
 } from 'lucide-react';
 import { ResumeData, SectionConfig, ActiveSection, ALL_SECTIONS } from '@/lib/types';
 import { generateLatex } from '@/lib/latexTemplate';
@@ -269,14 +270,19 @@ function BuilderContent() {
   // ── Import from an uploaded file (Upload mode) ───────────────────────────────
   // Fills the active resume with parsed data (unsaved + undoable), switches back
   // to Manual, and compiles straight from the new data so the preview updates.
-  const handleImport = async (data: ResumeData) => {
+  const handleImport = async (data: ResumeData, sectionConfigOverride?: SectionConfig[]) => {
     const merged: ResumeData = { ...data, custom: resumeData?.custom ?? [] };
-    handleDataChange(merged);          // sets resumeData, records undo, flags unsaved
+    const nextConfig = sectionConfigOverride ?? sectionConfig;
+    // Record one undo snapshot carrying both the new data and (if tailored) layout.
+    setResumeData(merged);
+    if (sectionConfigOverride) setSectionConfig(sectionConfigOverride);
+    pushHistory({ resumeData: merged, sectionConfig: nextConfig });
+    setHasUnsaved(true);
     setActiveSection('personal');
     setBuilderMode('manual');
     setIsCompiling(true); setCompileError('');
     try {
-      const blob = await compileToPDF(generateLatex(merged, sectionConfig));
+      const blob = await compileToPDF(generateLatex(merged, nextConfig));
       setPdfUrl(URL.createObjectURL(blob));
       setPreviewTab('preview');
     } catch (err) {
@@ -289,8 +295,9 @@ function BuilderContent() {
   // ── Save tailored data as a new resume branch (Transform mode) ──────────────
   // Forks with explicit content; the new branch becomes active and the existing
   // activeResume effect loads it with a clean undo/saved baseline.
-  const handleSaveBranch = async (name: string, data: ResumeData): Promise<boolean> => {
+  const handleSaveBranch = async (name: string, data: ResumeData, sectionConfigOverride?: SectionConfig[]): Promise<boolean> => {
     const merged: ResumeData = { ...data, custom: resumeData?.custom ?? [] };
+    const branchConfig = sectionConfigOverride ?? sectionConfig;
     if (hasUnsaved) {
       const proceed = await new Promise<boolean>(resolve => {
         setConfirmDialog({
@@ -304,7 +311,7 @@ function BuilderContent() {
       });
       if (!proceed) return false;
     }
-    const created = await forkFromMaster(name, merged, sectionConfig);
+    const created = await forkFromMaster(name, merged, branchConfig);
     if (!created) return false;
     setBuilderMode('manual');
     setActiveSection('personal');
@@ -410,11 +417,15 @@ function BuilderContent() {
 
           <div className="w-px h-4 bg-ink-700/80 flex-shrink-0 hidden md:block" />
 
-          {/* Logo */}
-          <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+          {/* Logo → Home */}
+          <Link
+            href="/"
+            title="Home"
+            className="hidden md:flex items-center gap-1.5 flex-shrink-0 hover:opacity-90 transition-opacity"
+          >
             <LogoMark size={20} />
             <span className="font-display font-bold text-xs text-ivory hidden lg:block">ResumeTeX</span>
-          </div>
+          </Link>
 
           <div className="w-px h-4 bg-ink-700/80 flex-shrink-0 hidden md:block" />
 
@@ -550,6 +561,15 @@ function BuilderContent() {
 
           <div className="w-px h-4 bg-ink-700/80 hidden sm:block" />
 
+          {/* Profile */}
+          <button
+            onClick={() => router.push('/profile')}
+            title="Profile & GitHub"
+            className="flex items-center px-1.5 py-1.5 text-xs text-ink-500 hover:text-ivory-muted transition-colors cursor-pointer rounded-lg hover:bg-ink-800/50"
+          >
+            <UserCircle size={15} />
+          </button>
+
           {/* Sign out */}
           <button
             onClick={signOut}
@@ -579,6 +599,7 @@ function BuilderContent() {
           ) : (
             <TransformPanel
               data={resumeData}
+              sectionConfig={sectionConfig}
               hasContent={hasContent}
               onApply={handleImport}
               onSaveBranch={handleSaveBranch}

@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     nebius_model: str = "MiniMaxAI/MiniMax-M2.5"
     nebius_max_tokens: int = 16384  # response token budget for parse/verify/transform (0 = let server decide)
 
+    # GitHub integration (Profile page). Only PUBLIC repos are read. A token is
+    # optional — it just raises the API rate limit (60/hr anon -> 5000/hr). The
+    # app never needs the user's own token; this is a single app-level token.
+    github_api_url: str = "https://api.github.com"
+    github_token: str = os.getenv("GITHUB_TOKEN", "")
+
     # Resume upload limits.
     upload_max_bytes: int = 5 * 1024 * 1024  # 5 MB max upload
     parse_text_limit: int = 16000            # chars of extracted text sent to the LLM

@@ -8,6 +8,12 @@ export interface AppUser {
   id: string;
   email: string;
   display_name: string | null;
+  github_username: string | null;
+}
+
+export interface ProfilePatch {
+  display_name?: string;
+  github_username?: string;
 }
 
 interface AuthContextType {
@@ -16,6 +22,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfile: (patch: ProfilePatch) => Promise<AppUser>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -24,6 +31,7 @@ const AuthContext = createContext<AuthContextType>({
   signIn: async () => {},
   signUp: async () => {},
   signOut: async () => {},
+  updateProfile: async () => { throw new Error('AuthProvider is not mounted'); },
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -73,8 +81,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const updateProfile = useCallback(async (patch: ProfilePatch) => {
+    const updated = await api<AppUser>('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    setUser(updated);
+    return updated;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -22,6 +22,12 @@ class UserOut(BaseModel):
     id: uuid.UUID
     email: str
     display_name: str | None = None
+    github_username: str | None = None
+
+
+class ProfileUpdateIn(BaseModel):
+    display_name: str | None = Field(default=None, max_length=120)
+    github_username: str | None = Field(default=None, max_length=100)
 
 
 class ResumeOut(BaseModel):
@@ -118,6 +124,14 @@ class TransformPlanIn(BaseModel):
     job_title: str = Field(default="", max_length=200)
     company: str = Field(default="", max_length=200)
     data: dict[str, Any]
+    section_config: list[Any] = Field(default_factory=list)  # [{id,label}] — to advise on whole-section drops
+
+
+class TransformSectionAdvice(BaseModel):
+    section: str                  # section id (e.g. 'publications', 'custom_…')
+    label: str
+    keep: bool = True
+    reason: str = ""
 
 
 class TransformStep(BaseModel):
@@ -133,6 +147,7 @@ class TransformStep(BaseModel):
 
 class TransformPlanOut(BaseModel):
     steps: list[TransformStep] = Field(default_factory=list)
+    section_advice: list[TransformSectionAdvice] = Field(default_factory=list)
     missing_keywords: list[str] = Field(default_factory=list)
 
 
@@ -153,3 +168,75 @@ class TransformSectionOut(BaseModel):
     missing_keywords: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     no_change_recommended: bool = False
+
+
+# ── GitHub integration (Profile page) ───────────────────────────────────────
+
+
+class GithubReposIn(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+
+
+class GithubRepoOut(BaseModel):
+    name: str = ""
+    full_name: str = ""           # "owner/repo"
+    description: str = ""
+    language: str = ""
+    topics: list[str] = Field(default_factory=list)
+    stars: int = 0
+    html_url: str = ""
+    homepage: str = ""
+    updated_at: str = ""
+    fork: bool = False
+    archived: bool = False
+
+
+class GithubReposOut(BaseModel):
+    repos: list[GithubRepoOut] = Field(default_factory=list)
+
+
+class GithubTreeIn(BaseModel):
+    full_name: str = Field(min_length=1, max_length=200)  # "owner/repo"
+
+
+class GithubTreeFile(BaseModel):
+    path: str
+    size: int = 0
+    suggested: bool = False   # pre-checked in the UI (manifests, entrypoints, key src)
+
+
+class GithubTreeOut(BaseModel):
+    default_branch: str = ""
+    truncated: bool = False   # GitHub omitted some files (very large repo)
+    files: list[GithubTreeFile] = Field(default_factory=list)
+
+
+class GithubProjectIn(BaseModel):
+    full_name: str = Field(min_length=1, max_length=200)   # "owner/repo"
+    file_paths: list[str] = Field(default_factory=list)    # files to read (empty -> auto-pick)
+    instruction: str = Field(default="", max_length=2000)  # optional refine comment
+    notes: str = Field(default="", max_length=4000)        # optional extra context (allowed facts)
+
+
+class GithubProjectOut(BaseModel):
+    # ProjectEntry shape minus id (the client assigns one): name, techStack,
+    # githubUrl, liveUrl, bullets[].
+    project: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    analyzed_files: list[str] = Field(default_factory=list)  # files actually read
+    digest: str = ""          # the code/README digest — passed back to /refine
+    rationale: str = ""
+
+
+class GithubRefineIn(BaseModel):
+    full_name: str = Field(min_length=1, max_length=200)
+    digest: str = Field(default="", max_length=200000)     # reused from analyze (no re-fetch)
+    instruction: str = Field(default="", max_length=2000)
+    notes: str = Field(default="", max_length=4000)
+    current_bullets: list[str] = Field(default_factory=list)
+
+
+class GithubRefineOut(BaseModel):
+    bullets: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    rationale: str = ""

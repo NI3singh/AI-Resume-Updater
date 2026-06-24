@@ -6,28 +6,29 @@ import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import {
   X, ArrowLeft, ArrowRight, Check, SkipForward, RefreshCw, Plus, Trash2,
-  GitFork, PencilLine, CheckCircle2, AlertTriangle, ShieldCheck, Sparkles, Wand2,
+  GitFork, PencilLine, CheckCircle2, AlertTriangle, ShieldCheck, Sparkles, Wand2, Layers,
 } from 'lucide-react';
-import { ResumeData } from '@/lib/types';
+import { ResumeData, SectionConfig } from '@/lib/types';
 import { ApiError } from '@/lib/api';
 import {
-  planTransform, tailorSection, TransformStep, SectionProposal,
+  planTransform, tailorSection, TransformStep, SectionProposal, SectionAdvice,
 } from '@/lib/resumeTransform';
 import { Spinner } from '@/components/ui/Spinner';
 
 interface Props {
   data: ResumeData;
+  sectionConfig: SectionConfig[];
   jobTitle: string;
   company: string;
   jobDescription: string;
-  /** Fill the editor with the tailored result (unsaved + undoable). */
-  onApply: (data: ResumeData) => void;
-  /** Save the tailored result as a new branch; resolves false on failure. */
-  onSaveBranch: (name: string, data: ResumeData) => Promise<boolean>;
+  /** Fill the editor with the tailored result (+ tailored layout); unsaved + undoable. */
+  onApply: (data: ResumeData, sectionConfig?: SectionConfig[]) => void;
+  /** Save the tailored result (+ tailored layout) as a new branch; false on failure. */
+  onSaveBranch: (name: string, data: ResumeData, sectionConfig?: SectionConfig[]) => Promise<boolean>;
   onClose: () => void;
 }
 
-type Phase = 'planning' | 'stepping' | 'done' | 'error';
+type Phase = 'planning' | 'sections' | 'stepping' | 'done' | 'error';
 type Draft = { bullets?: string[]; text?: string };
 type StepStatus = 'pending' | 'accepted' | 'skipped';
 type PropState = 'loading' | 'ready' | 'error';
@@ -46,7 +47,7 @@ const errMsg = (err: unknown): string =>
     : 'The AI could not tailor this section right now. Please try again.';
 
 export default function TransformWizard({
-  data, jobTitle, company, jobDescription, onApply, onSaveBranch, onClose,
+  data, sectionConfig, jobTitle, company, jobDescription, onApply, onSaveBranch, onClose,
 }: Props) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -68,12 +69,23 @@ export default function TransformWizard({
   const [instruction, setInstruction] = useState<Record<number, string>>({});
   // JD requirements the résumé as a whole doesn't show (from the plan).
   const [planMissing, setPlanMissing] = useState<string[]>([]);
+  // Whole-section drop advice + the user's keep/drop choices.
+  const [sectionAdvice, setSectionAdvice] = useState<SectionAdvice[]>([]);
+  const [keepSections, setKeepSections] = useState<Record<string, boolean>>({});
 
   // Branch-save sub-state (on the done screen).
   const [naming, setNaming] = useState(false);
   const [branchName, setBranchName] = useState('');
   const [savingBranch, setSavingBranch] = useState(false);
   const [branchError, setBranchError] = useState('');
+
+  // Sections the user is dropping → the filtered step list + tailored layout.
+  const droppedSet = useMemo(
+    () => new Set(sectionAdvice.filter((a) => keepSections[a.section] === false).map((a) => a.section)),
+    [sectionAdvice, keepSections],
+  );
+  const activeSteps = useMemo(() => steps.filter((s) => !droppedSet.has(s.section)), [steps, droppedSet]);
+  const tailoredConfig = useMemo(() => sectionConfig.filter((s) => !droppedSet.has(s.id)), [sectionConfig, droppedSet]);
 
   // ── Original-unit lookups (against the untouched `data`, for grounding + diff) ──
   const findEntry = useCallback((section: string, id: string): Record<string, unknown> => {
@@ -129,11 +141,14 @@ export default function TransformWizard({
     let cancelled = false;
     (async () => {
       try {
-        const plan = await planTransform(jobDescription, jobTitle, company, data);
+        const plan = await planTransform(jobDescription, jobTitle, company, data, sectionConfig);
         if (cancelled) return;
+        const advice = plan.section_advice ?? [];
         setSteps(plan.steps);
+        setSectionAdvice(advice);
+        setKeepSections(Object.fromEntries(advice.map((a) => [a.section, a.keep] as [string, boolean])));
         setPlanMissing(plan.missing_keywords ?? []);
-        setPhase(plan.steps.length ? 'stepping' : 'done');
+        setPhase(advice.length ? 'sections' : (plan.steps.length ? 'stepping' : 'done'));
       } catch (err) {
         if (cancelled) return;
         setPlanError(errMsg(err));
@@ -141,11 +156,11 @@ export default function TransformWizard({
       }
     })();
     return () => { cancelled = true; };
-  }, [data, jobDescription, jobTitle, company]);
+  }, [data, sectionConfig, jobDescription, jobTitle, company]);
 
   // ── Lazy per-step suggestion fetch ──────────────────────────────────────────
   const fetchProposal = useCallback(async (idx: number) => {
-    const step = steps[idx];
+    const step = activeSteps[idx];
     if (!step) return;
     setPropState((s) => ({ ...s, [idx]: 'loading' }));
     setPropError((e) => ({ ...e, [idx]: '' }));
@@ -162,17 +177,17 @@ export default function TransformWizard({
       setPropError((e) => ({ ...e, [idx]: errMsg(err) }));
       setPropState((s) => ({ ...s, [idx]: 'error' }));
     }
-  }, [steps, jobDescription, jobTitle, company, originalUnit, sourcesFor, draftFromProposal, instruction]);
+  }, [activeSteps, jobDescription, jobTitle, company, originalUnit, sourcesFor, draftFromProposal, instruction]);
 
   useEffect(() => {
     if (phase !== 'stepping') return;
-    const s = steps[i];
+    const s = activeSteps[i];
     if (!s || proposals[i] || propState[i] === 'loading') return;
     // Auto-suggest only for units that need a change AND don't ask for extra
     // input — README / related-work steps wait for an explicit Generate so the
     // user can paste grounding first.
     if (s.recommend_change && !s.asks_readme && !s.asks_related_work) fetchProposal(i);
-  }, [phase, i, steps, proposals, propState, fetchProposal]);
+  }, [phase, i, activeSteps, proposals, propState, fetchProposal]);
 
   // ── Esc to close ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -201,19 +216,19 @@ export default function TransformWizard({
   };
 
   const advance = () => {
-    if (i < steps.length - 1) setI(i + 1);
+    if (i < activeSteps.length - 1) setI(i + 1);
     else setPhase('done');
   };
 
   const accept = () => {
-    const step = steps[i];
+    const step = activeSteps[i];
     const draft = drafts[i];
     if (step && draft) applyDraft(step, draft);
     setStatuses((s) => ({ ...s, [i]: 'accepted' }));
     advance();
   };
   const skip = () => {
-    const s = steps[i];
+    const s = activeSteps[i];
     // Restore the original content for this unit (handles Back → re-skip after a
     // prior Accept), then move on.
     if (s) applyDraft(s, BULLET_KINDS.has(s.kind) ? { bullets: oldBullets(s) } : { text: oldText(s) });
@@ -247,7 +262,7 @@ export default function TransformWizard({
   const confirmBranch = async () => {
     if (!branchName.trim() || savingBranch) return;
     setSavingBranch(true); setBranchError('');
-    const ok = await onSaveBranch(branchName.trim(), working);
+    const ok = await onSaveBranch(branchName.trim(), working, tailoredConfig);
     setSavingBranch(false);
     if (ok) onClose();
     else setBranchError("Couldn't create the branch — please try again.");
@@ -255,7 +270,8 @@ export default function TransformWizard({
 
   if (!mounted) return null;
 
-  const step = steps[i];
+  const step = activeSteps[i];
+  const committable = activeSteps.length > 0 || droppedSet.size > 0;
   const isBullets = step ? BULLET_KINDS.has(step.kind) : false;
   const proposal = proposals[i];
   const draft = drafts[i];
@@ -305,9 +321,9 @@ export default function TransformWizard({
         </div>
 
         {/* ── Progress dots (stepping/done) ── */}
-        {(phase === 'stepping' || phase === 'done') && steps.length > 0 && (
+        {(phase === 'stepping' || phase === 'done') && activeSteps.length > 0 && (
           <div className="flex items-center gap-1.5 px-5 py-2.5 border-b border-ink-800/60 flex-shrink-0 overflow-x-auto">
-            {steps.map((s, idx) => {
+            {activeSteps.map((s, idx) => {
               const st = statuses[idx];
               const active = phase === 'stepping' && idx === i;
               const color =
@@ -322,7 +338,7 @@ export default function TransformWizard({
               );
             })}
             <span className="ml-auto text-[10px] font-mono text-ivory-dim flex-shrink-0">
-              {phase === 'done' ? `${acceptedCount} applied` : `Step ${i + 1} of ${steps.length}`}
+              {phase === 'done' ? `${acceptedCount} applied` : `Step ${i + 1} of ${activeSteps.length}`}
             </span>
           </div>
         )}
@@ -336,6 +352,57 @@ export default function TransformWizard({
               <Spinner size={40} />
               <p className="text-ivory text-sm font-medium mt-3">Reading the job description…</p>
               <p className="text-ivory/40 text-xs mt-1">Mapping it to your résumé sections</p>
+            </div>
+          )}
+
+          {/* Sections — which whole sections to keep/drop for this JD */}
+          {phase === 'sections' && (
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Layers size={15} className="text-gold" />
+                  <h3 className="font-display font-semibold text-ivory text-base">Which sections fit this role?</h3>
+                </div>
+                <p className="text-ivory/50 text-xs mt-1 leading-relaxed">
+                  The AI suggests which whole sections to keep for {jobTitle.trim() || 'this job'}. Unchecked
+                  sections won&apos;t appear in the tailored résumé — your underlying data is always kept. You decide.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {sectionAdvice.map((a) => {
+                  const keep = keepSections[a.section] !== false;
+                  return (
+                    <label
+                      key={a.section}
+                      className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                        keep ? 'border-ink-700/60 bg-ink-800/30' : 'border-crimson/25 bg-crimson/[0.05]'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={keep}
+                        onChange={(e) => setKeepSections((s) => ({ ...s, [a.section]: e.target.checked }))}
+                        className="accent-gold mt-0.5"
+                      />
+                      <div className="min-w-0">
+                        <p className={`text-sm font-medium ${keep ? 'text-ivory' : 'text-ivory-muted line-through'}`}>{a.label}</p>
+                        {!a.keep && a.reason && <p className="text-[11px] text-gold/80 mt-0.5">AI suggests dropping — {a.reason}</p>}
+                        {a.keep && a.reason && <p className="text-[11px] text-ivory/45 mt-0.5">{a.reason}</p>}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              {planMissing.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-ink-500 mb-1.5">Honest gaps — required by the JD, not on your résumé</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {planMissing.map((k) => (
+                      <span key={k} className="px-2 py-0.5 rounded-md text-[10px] bg-gold/10 text-gold border border-gold/25">{k}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -576,10 +643,12 @@ export default function TransformWizard({
                   <CheckCircle2 size={22} className="text-jade" />
                 </div>
                 <h3 className="font-display font-semibold text-ivory text-base">
-                  {steps.length === 0 ? 'Nothing to tailor' : `${acceptedCount} section${acceptedCount === 1 ? '' : 's'} tailored`}
+                  {!committable
+                    ? 'Nothing to tailor'
+                    : `${acceptedCount} section${acceptedCount === 1 ? '' : 's'} tailored${droppedSet.size ? ` · ${droppedSet.size} dropped` : ''}`}
                 </h3>
                 <p className="text-ivory/50 text-xs mt-1">
-                  {steps.length === 0
+                  {!committable
                     ? 'Add some content in Manual mode first, then tailor it to a job.'
                     : 'Apply to this résumé, or save it as a new branch — your facts are protected.'}
                 </p>
@@ -608,6 +677,20 @@ export default function TransformWizard({
         </div>
 
         {/* ── Footer actions ── */}
+        {phase === 'sections' && (
+          <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-t border-ink-700/60 flex-shrink-0">
+            <p className="text-[11px] text-ivory-dim">
+              {droppedSet.size > 0 ? `${droppedSet.size} section${droppedSet.size === 1 ? '' : 's'} will be dropped` : 'All sections kept'}
+            </p>
+            <button
+              onClick={() => setPhase(activeSteps.length ? 'stepping' : 'done')}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg bg-gold text-ink-950 font-semibold hover:bg-gold-light transition-colors cursor-pointer shadow-sm shadow-gold/25"
+            >
+              Continue <ArrowRight size={13} />
+            </button>
+          </div>
+        )}
+
         {phase === 'stepping' && (
           <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-t border-ink-700/60 flex-shrink-0">
             <button
@@ -629,7 +712,7 @@ export default function TransformWizard({
                 disabled={!proposal || showSpinner}
                 className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg bg-gold text-ink-950 font-semibold hover:bg-gold-light transition-colors cursor-pointer shadow-sm shadow-gold/25 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Check size={13} /> {i < steps.length - 1 ? 'Accept & next' : 'Accept & finish'}
+                <Check size={13} /> {i < activeSteps.length - 1 ? 'Accept & next' : 'Accept & finish'}
                 <ArrowRight size={12} />
               </button>
             </div>
@@ -675,10 +758,10 @@ export default function TransformWizard({
                 >
                   Discard
                 </button>
-                {steps.length > 0 && (
+                {committable && (
                   <>
                     <button
-                      onClick={() => { onApply(working); onClose(); }}
+                      onClick={() => { onApply(working, tailoredConfig); onClose(); }}
                       className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg border border-ink-600/80 text-ivory-muted hover:text-ivory hover:bg-ink-800/50 transition-colors cursor-pointer"
                     >
                       <PencilLine size={13} /> Apply here (unsaved)

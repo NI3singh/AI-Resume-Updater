@@ -3,21 +3,23 @@
 
 import { useState } from 'react';
 import { Target, AlertTriangle, Wand2, ShieldCheck } from 'lucide-react';
-import { ResumeData } from '@/lib/types';
+import { ResumeData, SectionConfig } from '@/lib/types';
 import { JD_MAX_CHARS } from '@/lib/resumeTransform';
 import TransformWizard from './TransformWizard';
 
 interface TransformPanelProps {
   data: ResumeData | null;
+  /** The current resume's section layout (for whole-section drop advice). */
+  sectionConfig: SectionConfig[];
   /** Whether the current resume has tailorable content (computed by the page). */
   hasContent: boolean;
-  /** Apply the tailored data to the current resume (unsaved + undoable). */
-  onApply: (data: ResumeData) => void;
-  /** Save the tailored data as a new resume branch; resolves false on failure. */
-  onSaveBranch: (name: string, data: ResumeData) => Promise<boolean>;
+  /** Apply the tailored data (+ optional tailored section layout) — unsaved + undoable. */
+  onApply: (data: ResumeData, sectionConfig?: SectionConfig[]) => void;
+  /** Save the tailored data (+ optional tailored layout) as a new branch; false on failure. */
+  onSaveBranch: (name: string, data: ResumeData, sectionConfig?: SectionConfig[]) => Promise<boolean>;
 }
 
-export default function TransformPanel({ data, hasContent, onApply, onSaveBranch }: TransformPanelProps) {
+export default function TransformPanel({ data, sectionConfig, hasContent, onApply, onSaveBranch }: TransformPanelProps) {
   const [jd, setJd]             = useState('');
   const [jobTitle, setJobTitle] = useState('');
   const [company, setCompany]   = useState('');
@@ -118,6 +120,7 @@ export default function TransformPanel({ data, hasContent, onApply, onSaveBranch
       {open && data && (
         <TransformWizard
           data={data}
+          sectionConfig={sectionConfig}
           jobTitle={jobTitle}
           company={company}
           jobDescription={jd.trim()}

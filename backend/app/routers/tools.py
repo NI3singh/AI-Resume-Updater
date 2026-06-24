@@ -35,6 +35,7 @@ from ..schemas import (
     ParseOut,
     TransformPlanIn,
     TransformPlanOut,
+    TransformSectionAdvice,
     TransformSectionIn,
     TransformSectionOut,
     TransformStep,
@@ -439,18 +440,23 @@ def _clean_keywords(value: object, limit: int = 20) -> list[str]:
 # it's cheap and can't truncate.
 PLAN_SYSTEM = (
     "You are a resume tailoring planner. You are given a target job description "
-    "(JD) and a list of resume UNITS — each with an index, kind, label, and a "
-    "short preview of its current content. For each unit, decide whether it is "
-    "worth tailoring for THIS job.\n\n"
+    "(JD), a list of resume UNITS (each with an index, kind, label, and a short "
+    "preview), and a list of whole SECTIONS present in the resume. Decide what to "
+    "tailor for THIS job.\n\n"
     "Return ONLY a JSON object (no markdown, no commentary):\n"
     "{\n"
     '  "units": [ { "i": <index>, "recommend_change": true, "reason": "<= 12 words why" } ],\n'
+    '  "sections": [ { "section": "<section id>", "keep": true, "reason": "<= 12 words why" } ],\n'
     '  "missing_keywords": ["JD requirements the resume as a whole does not show"]\n'
     "}\n"
-    "Set recommend_change=false when a unit is already well aligned with the JD, "
-    "or is irrelevant to it, so the user can safely skip it. Keep each reason "
-    "short and concrete. Be honest in missing_keywords and NEVER suggest adding "
-    "them to the resume."
+    "For UNITS: recommend_change=false when a unit is already well aligned with "
+    "the JD, or is irrelevant to it, so the user can safely skip it.\n"
+    "For SECTIONS: keep=false ONLY when a whole section clearly does not help this "
+    "application and the candidate should consider dropping it (e.g. publications "
+    "for a non-research role, extracurriculars for a senior role). Be conservative "
+    "— default to keep=true, and give a short reason whenever you advise a drop.\n"
+    "Keep reasons short and concrete. Be honest in missing_keywords and NEVER "
+    "suggest adding them to the resume."
 )
 
 
@@ -466,23 +472,42 @@ def _unit_preview(kind: str, entry: dict, limit: int = 200) -> str:
     return " ".join(text.split())[:limit]
 
 
+def _section_has_content(data: dict, section_id: str) -> bool:
+    """Whether a section (builtin or custom_*) carries any content in ``data``."""
+    if section_id.startswith("custom_"):
+        for cs in data.get("custom") or []:
+            if isinstance(cs, dict) and cs.get("id") == section_id:
+                return bool(cs.get("entries"))
+        return False
+    value = data.get(section_id)
+    return isinstance(value, list) and len(value) > 0
+
+
 def _enrich_plan(
-    steps: list[TransformStep], previews: list[str], jd: str, job_title: str, company: str,
+    steps: list[TransformStep],
+    previews: list[str],
+    section_advice: list[TransformSectionAdvice],
+    jd: str,
+    job_title: str,
+    company: str,
 ) -> list[str]:
-    """Best-effort: ask the LLM which units to tailor + the JD gaps. Mutates
-    ``steps`` in place (recommend_change/reason) and returns missing_keywords.
-    Any LLM failure leaves the deterministic plan (all recommend_change=True)."""
-    if not steps:
+    """Best-effort: ask the LLM which units to tailor, which whole sections to
+    drop, and the JD gaps. Mutates ``steps`` and ``section_advice`` in place and
+    returns missing_keywords. Any LLM failure leaves the deterministic plan
+    (all recommend_change=True, all keep=True)."""
+    if not steps and not section_advice:
         return []
     units = [
         {"i": k, "kind": s.kind, "label": s.label, "preview": previews[k]}
         for k, s in enumerate(steps)
     ]
+    sections = [{"section": a.section, "label": a.label} for a in section_advice]
     user_msg = (
         f"JOB TITLE: {job_title.strip() or '(not provided)'}\n"
         f"COMPANY: {company.strip() or '(not provided)'}\n\n"
         "JOB DESCRIPTION:\n" + jd + "\n\n"
-        "RESUME UNITS (JSON):\n" + json.dumps(units, ensure_ascii=False)
+        "RESUME UNITS (JSON):\n" + json.dumps(units, ensure_ascii=False) + "\n\n"
+        "RESUME SECTIONS (JSON):\n" + json.dumps(sections, ensure_ascii=False)
     )
     try:
         result = chat_json(PLAN_SYSTEM, user_msg, max_tokens=2048)
@@ -503,6 +528,20 @@ def _enrich_plan(
                 reason = str(u.get("reason") or "").strip()
                 if reason:
                     steps[idx].reason = reason[:140]
+
+    raw_sections = result.get("sections")
+    if isinstance(raw_sections, list):
+        by_id = {a.section: a for a in section_advice}
+        for s in raw_sections:
+            if not isinstance(s, dict):
+                continue
+            adv = by_id.get(str(s.get("section") or ""))
+            if adv is not None:
+                adv.keep = bool(s.get("keep", True))
+                reason = str(s.get("reason") or "").strip()
+                if reason:
+                    adv.reason = reason[:140]
+
     return _clean_keywords(result.get("missing_keywords"))
 
 
@@ -556,11 +595,23 @@ def transform_plan(
             ))
             previews.append(_unit_preview("education", e))
 
+    # Whole-section drop advice — one entry per non-empty section in the user's
+    # section_config (the source of truth for what renders), labels and all.
+    section_advice: list[TransformSectionAdvice] = []
+    for s in payload.section_config:
+        if not isinstance(s, dict):
+            continue
+        sid = str(s.get("id") or "")
+        if sid and _section_has_content(payload.data, sid):
+            section_advice.append(TransformSectionAdvice(
+                section=sid, label=str(s.get("label") or sid.title()), keep=True, reason="",
+            ))
+
     missing = _enrich_plan(
-        steps, previews, payload.job_description[: settings.parse_text_limit],
+        steps, previews, section_advice, payload.job_description[: settings.parse_text_limit],
         payload.job_title, payload.company,
     )
-    return TransformPlanOut(steps=steps, missing_keywords=missing)
+    return TransformPlanOut(steps=steps, section_advice=section_advice, missing_keywords=missing)
 
 
 @router.post("/transform/section", response_model=TransformSectionOut)

@@ -12,7 +12,7 @@
 // one-shot endpoint is gone — it was the source of text corruption.
 
 import { api } from './api';
-import { ResumeData } from './types';
+import { ResumeData, SectionConfig } from './types';
 
 // Keep the textarea under the backend truncation limit (parse_text_limit=16000).
 export const JD_MAX_CHARS = 15000;
@@ -29,8 +29,17 @@ export interface TransformStep {
   reason: string;
 }
 
+/** AI advice on whether to keep a whole section for this JD. */
+export interface SectionAdvice {
+  section: string;   // section id (matches SectionConfig.id)
+  label: string;
+  keep: boolean;
+  reason: string;
+}
+
 export interface TransformPlan {
   steps: TransformStep[];
+  section_advice: SectionAdvice[];
   missing_keywords: string[];
 }
 
@@ -57,6 +66,7 @@ export async function planTransform(
   jobTitle: string,
   company: string,
   data: ResumeData,
+  sectionConfig: SectionConfig[],
 ): Promise<TransformPlan> {
   // Custom sections never go to the LLM — the wizard keeps them untouched.
   const { custom: _custom, ...builtin } = data;
@@ -67,6 +77,7 @@ export async function planTransform(
       job_title: jobTitle,
       company,
       data: builtin,
+      section_config: sectionConfig,
     }),
   });
 }
