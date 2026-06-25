@@ -46,6 +46,9 @@ class UserProfile(Base):
         primary_key=True,
     )
     display_name: Mapped[str | None] = mapped_column(String(120))
+    # GitHub handle (public). Used by the Profile page to pull the user's public
+    # repos and craft project entries for the Master résumé.
+    github_username: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now(), nullable=False

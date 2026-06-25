@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowRight, FileText, Cpu, Download, GitBranch, Zap, ExternalLink, Sparkles, UploadCloud, Target } from 'lucide-react';
+import { ArrowRight, FileText, Cpu, Download, GitBranch, Zap, ExternalLink, Sparkles, UploadCloud, Target, UserCircle } from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import AmbientGlyphs from '@/components/ui/AmbientGlyphs';
 import Logo, { LogoMark } from '@/components/ui/Logo';
@@ -91,6 +91,14 @@ export default function HomePage() {
               <span className="hidden sm:block text-xs text-ivory-muted font-mono">
                 Hey, <span className="text-ivory font-semibold">{firstName}</span>
               </span>
+              <Link
+                href="/profile"
+                title="Profile & GitHub"
+                className="flex items-center gap-1 text-xs font-medium text-ivory-muted hover:text-ivory transition-colors duration-200"
+              >
+                <UserCircle size={14} />
+                <span className="hidden sm:inline">Profile</span>
+              </Link>
               <Link href="/builder" onClick={goToBuilder} className="btn-primary !px-4 !py-1.5 !text-xs !rounded-lg">
                 Open Builder
                 <ArrowRight size={12} />
