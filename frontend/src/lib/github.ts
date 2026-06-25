@@ -66,6 +66,15 @@ export async function fetchGithubRepos(username: string): Promise<GithubRepo[]> 
   return res.repos ?? [];
 }
 
+/** Short README blurb for a repo whose GitHub 'About' is empty ('' if none). */
+export async function fetchReadmeSummary(fullName: string): Promise<string> {
+  const res = await api<{ summary: string }>('/github/readme-summary', {
+    method: 'POST',
+    body: JSON.stringify({ full_name: fullName }),
+  });
+  return res.summary ?? '';
+}
+
 export async function fetchProjectTree(fullName: string): Promise<ProjectTree> {
   return api<ProjectTree>('/github/project/tree', {
     method: 'POST',

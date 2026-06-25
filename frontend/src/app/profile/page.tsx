@@ -14,7 +14,7 @@ import { Spinner, PageLoader } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
 import { useMaster } from '@/hooks/useMaster';
 import { ApiError } from '@/lib/api';
-import { fetchGithubRepos, GithubRepo } from '@/lib/github';
+import { fetchGithubRepos, fetchReadmeSummary, GithubRepo } from '@/lib/github';
 import ProjectCraftDialog from '@/components/profile/ProjectCraftDialog';
 
 type ReposState = 'idle' | 'loading' | 'error';
@@ -37,6 +37,9 @@ export default function ProfilePage() {
   const [craftRepo, setCraftRepo] = useState<GithubRepo | null>(null);  // repo open in the craft dialog
   const [removing, setRemoving]   = useState('');   // githubUrl OR project id currently being removed
   const [showNewOnly, setShowNewOnly] = useState(false);
+  // Lazy README blurbs for repos whose GitHub "About" is empty.
+  const [summaries, setSummaries] = useState<Record<string, string>>({});
+  const [summaryDone, setSummaryDone] = useState<Set<string>>(new Set());
 
   // Certifications manager
   const [certTitle, setCertTitle]   = useState('');
@@ -63,6 +66,32 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user?.github_username) loadRepos(user.github_username);
   }, [user?.github_username, loadRepos]);
+
+  // Fill missing card blurbs from the README (only for repos with no GitHub
+  // "About"). Bounded + concurrency-limited so it never hammers the API.
+  useEffect(() => {
+    const need = repos
+      .filter((r) => !r.description && !r.fork && !r.archived && !summaryDone.has(r.full_name))
+      .slice(0, 40);
+    if (need.length === 0) return;
+    let cancelled = false;
+    const queue = [...need];
+    const worker = async () => {
+      while (queue.length && !cancelled) {
+        const r = queue.shift()!;
+        try {
+          const s = await fetchReadmeSummary(r.full_name);
+          if (!cancelled && s) setSummaries((prev) => ({ ...prev, [r.full_name]: s }));
+        } catch { /* ignore — the card just falls back to "No description" */ }
+        finally {
+          if (!cancelled) setSummaryDone((prev) => new Set(prev).add(r.full_name));
+        }
+      }
+    };
+    Promise.all([worker(), worker(), worker(), worker()]);  // 4 concurrent
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repos]);
 
   const connect = async () => {
     const handle = ghInput.trim();
@@ -147,25 +176,57 @@ export default function ProfilePage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-        {/* Title */}
-        <div>
-          <h1 className="font-serif text-3xl md:text-4xl font-semibold tracking-tight">Profile</h1>
-          <p className="text-ivory/50 text-sm mt-1.5 max-w-2xl">
-            Keep one <span className="text-ivory-muted font-medium">Master résumé</span> with everything you&apos;ve built.
-            Pull projects in from GitHub — AI drafts the bullets, you review them, and nothing is invented. Then use
-            <span className="text-gold"> Transform</span> to tailor it to any job.
-          </p>
-        </div>
-
-        {/* Connect GitHub */}
-        <section className="card">
-          <div className="flex items-center gap-2 mb-3">
-            <Github size={16} className="text-gold" />
-            <h2 className="font-display font-bold text-sm">Connect GitHub</h2>
-            {connected && <span className="text-[10px] font-mono text-jade ml-1">· @{user.github_username}</span>}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {/* ── Hero ─────────────────────────────────────────────────────────── */}
+        <section className="relative overflow-hidden rounded-2xl border border-ink-700/60 bg-ink-900/40 p-6 sm:p-8">
+          <div className="glow-gold absolute -top-24 -right-12 w-72 h-72 blur-2xl pointer-events-none" />
+          <div className="relative flex items-start gap-4">
+            {connected && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`https://github.com/${user.github_username}.png?size=112`}
+                alt=""
+                className="hidden sm:block w-14 h-14 rounded-xl border border-ink-600 object-cover flex-shrink-0"
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <h1 className="font-serif text-3xl md:text-4xl font-semibold tracking-tight">Your Profile</h1>
+              <p className="text-ivory/55 text-sm mt-1.5 max-w-2xl leading-relaxed">
+                One <span className="text-ivory font-medium">Master résumé</span> with everything you&apos;ve built —
+                pull projects from GitHub (bullets crafted from your real code, never invented), add certifications,
+                then <span className="text-gold">Transform</span> it for any job.
+              </p>
+            </div>
           </div>
-          <p className="text-ivory/50 text-xs mb-3">Enter your GitHub username (public repositories only).</p>
+
+          {/* Stat tiles */}
+          <div className="relative mt-6 grid grid-cols-3 gap-2.5 sm:max-w-xl">
+            <div className="rounded-xl border border-ink-700/60 bg-ink-800/40 px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-ivory-dim"><FolderGit2 size={12} /><span className="text-[10px] uppercase tracking-wide">Projects</span></div>
+              <p className="font-serif text-2xl font-semibold text-ivory mt-1 leading-none">{masterProjects.length}</p>
+            </div>
+            <div className="rounded-xl border border-ink-700/60 bg-ink-800/40 px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-ivory-dim"><Award size={12} /><span className="text-[10px] uppercase tracking-wide">Certs</span></div>
+              <p className="font-serif text-2xl font-semibold text-ivory mt-1 leading-none">{masterCerts.length}</p>
+            </div>
+            <div className="rounded-xl border border-ink-700/60 bg-ink-800/40 px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-ivory-dim"><Github size={12} /><span className="text-[10px] uppercase tracking-wide">GitHub</span></div>
+              <p className={`text-sm font-medium mt-1.5 leading-none truncate ${connected ? 'text-jade' : 'text-ivory-dim'}`}>
+                {connected ? `@${user.github_username}` : 'Not linked'}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Connect GitHub ───────────────────────────────────────────────── */}
+        <section className="card">
+          <div className="flex items-center gap-2.5 mb-3">
+            <span className="w-7 h-7 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center flex-shrink-0"><Github size={14} className="text-gold" /></span>
+            <div>
+              <h2 className="font-display font-bold text-sm leading-tight">Connect GitHub</h2>
+              <p className="text-ivory/45 text-[11px]">Public repositories only{connected ? ` · linked to @${user.github_username}` : ''}</p>
+            </div>
+          </div>
           <div className="flex items-center gap-2 max-w-md">
             <input
               value={ghInput}
@@ -185,19 +246,20 @@ export default function ProfilePage() {
           </div>
         </section>
 
-        {/* Repos */}
+        {/* ── Repositories ─────────────────────────────────────────────────── */}
         {connected && (
-          <section>
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h2 className="font-display font-bold text-sm flex items-center gap-2">
-                Your repositories
-                {reposState === 'idle' && <span className="text-[10px] font-mono text-ivory-dim">({visibleRepos.length})</span>}
-                {reposState === 'idle' && newRepoCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-gold/10 text-gold border border-gold/25">
-                    {newRepoCount} new
-                  </span>
-                )}
-              </h2>
+          <section className="card">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-7 h-7 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center flex-shrink-0"><FolderGit2 size={14} className="text-gold" /></span>
+                <h2 className="font-display font-bold text-sm flex items-center gap-2">
+                  GitHub projects
+                  {reposState === 'idle' && <span className="text-[10px] font-mono text-ivory-dim">{visibleRepos.length}</span>}
+                  {reposState === 'idle' && newRepoCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-gold/10 text-gold border border-gold/25">{newRepoCount} new</span>
+                  )}
+                </h2>
+              </div>
               <div className="flex items-center gap-3">
                 {newRepoCount > 0 && (
                   <label className="flex items-center gap-1.5 text-[11px] text-ivory-muted cursor-pointer select-none">
@@ -207,7 +269,7 @@ export default function ProfilePage() {
                 )}
                 <label className="flex items-center gap-1.5 text-[11px] text-ivory-muted cursor-pointer select-none">
                   <input type="checkbox" checked={hideForks} onChange={(e) => setHideForks(e.target.checked)} className="accent-gold" />
-                  Hide forks &amp; archived
+                  Hide forks
                 </label>
               </div>
             </div>
@@ -236,8 +298,16 @@ export default function ProfilePage() {
                 {visibleRepos.map((repo) => {
                   const added = addedUrls.has(repo.html_url);
                   const isRemoving = removing === repo.html_url;
+                  const blurb = repo.description || summaries[repo.full_name] || '';
+                  const blurbPending = !repo.description && !repo.fork && !repo.archived && !summaryDone.has(repo.full_name);
                   return (
-                    <div key={repo.full_name} className="card flex flex-col gap-2 !p-4">
+                    <div
+                      key={repo.full_name}
+                      className={`group relative flex flex-col gap-2 rounded-xl border bg-ink-800/40 p-4 transition-all duration-200 hover:-translate-y-0.5 ${
+                        added ? 'border-jade/30' : 'border-ink-700/60 hover:border-gold/35'
+                      }`}
+                    >
+                      <div className="absolute top-0 inset-x-4 h-px bg-gradient-to-r from-transparent via-gold/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                       <div className="flex items-start justify-between gap-2">
                         <a href={repo.html_url} target="_blank" rel="noopener noreferrer"
                           className="font-display font-bold text-sm text-ivory hover:text-gold transition-colors truncate flex items-center gap-1.5">
@@ -252,7 +322,11 @@ export default function ProfilePage() {
                       </div>
 
                       <p className="text-ivory/50 text-xs leading-relaxed line-clamp-2 min-h-[2rem]">
-                        {repo.description || <span className="italic text-ivory-dim">No GitHub description — bullets are drafted from the README on add.</span>}
+                        {blurb
+                          ? blurb
+                          : blurbPending
+                            ? <span className="italic text-ivory-dim/60">Reading README…</span>
+                            : <span className="italic text-ivory-dim">No description</span>}
                       </p>
 
                       <div className="flex flex-wrap gap-1">
@@ -291,101 +365,114 @@ export default function ProfilePage() {
           </section>
         )}
 
-        {/* Certifications */}
-        <section className="card">
-          <div className="flex items-center gap-2 mb-3">
-            <Award size={16} className="text-gold" />
-            <h2 className="font-display font-bold text-sm">Certifications</h2>
-            {masterCerts.length > 0 && <span className="text-[10px] font-mono text-ivory-dim">({masterCerts.length})</span>}
-          </div>
-          <p className="text-ivory/50 text-xs mb-3">
-            Add a certification by title and credential link — it goes straight into your Master résumé.
-          </p>
-          <div className="flex flex-col sm:flex-row items-stretch gap-2 max-w-2xl">
-            <input
-              value={certTitle}
-              onChange={(e) => setCertTitle(e.target.value)}
-              placeholder="Title — e.g. AWS Certified Solutions Architect"
-              className="input-base flex-1 !text-sm"
-            />
-            <input
-              value={certUrl}
-              onChange={(e) => setCertUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submitCert()}
-              placeholder="Credential URL (optional)"
-              className="input-base flex-1 !text-sm"
-            />
-            <button
-              onClick={submitCert}
-              disabled={!certTitle.trim() || addingCert}
-              className="btn-primary !px-4 !py-2.5 !text-xs disabled:opacity-50 sm:flex-shrink-0"
-            >
-              {addingCert ? <Spinner size={13} tone="current" /> : <Plus size={13} />} Add
-            </button>
-          </div>
-          {certError && <p className="text-[11px] text-crimson mt-2">{certError}</p>}
-
-          {masterCerts.length > 0 && (
-            <ul className="mt-4 space-y-1.5">
-              {masterCerts.map((c) => (
-                <li key={c.id} className="flex items-center gap-2 rounded-lg border border-ink-700/60 bg-ink-800/40 px-3 py-2">
-                  <Award size={13} className="text-gold/70 flex-shrink-0" />
-                  <span className="text-xs text-ivory flex-1 min-w-0 truncate">{c.text}</span>
-                  {c.credentialUrl && (
-                    <a href={c.credentialUrl} target="_blank" rel="noopener noreferrer"
-                      className="text-ivory-dim hover:text-gold transition-colors" title="Open credential">
-                      <ExternalLink size={12} />
-                    </a>
-                  )}
-                  <button
-                    onClick={() => removeCert(c.id)}
-                    disabled={removingCert === c.id}
-                    className="text-ivory-dim hover:text-crimson transition-colors disabled:opacity-50"
-                    title="Remove"
-                  >
-                    {removingCert === c.id ? <Spinner size={11} tone="current" /> : <Trash2 size={12} />}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Projects currently in the Master (incl. non-GitHub ones) */}
-        {masterProjects.length > 0 && (
+        {/* ── Master management: certifications + projects ──────────────────── */}
+        <div className="grid lg:grid-cols-2 gap-6 items-start">
+          {/* Certifications */}
           <section className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <FolderGit2 size={16} className="text-gold" />
-              <h2 className="font-display font-bold text-sm">Projects in your Master</h2>
-              <span className="text-[10px] font-mono text-ivory-dim">({masterProjects.length})</span>
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="w-7 h-7 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center flex-shrink-0"><Award size={14} className="text-gold" /></span>
+              <h2 className="font-display font-bold text-sm flex items-center gap-2">
+                Certifications
+                {masterCerts.length > 0 && <span className="text-[10px] font-mono text-ivory-dim">{masterCerts.length}</span>}
+              </h2>
             </div>
-            <ul className="space-y-1.5">
-              {masterProjects.map((p) => (
-                <li key={p.id} className="flex items-center gap-2 rounded-lg border border-ink-700/60 bg-ink-800/40 px-3 py-2">
-                  <FolderGit2 size={13} className="text-gold/70 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-ivory truncate">{p.name || 'Untitled project'}</p>
-                    {p.techStack && <p className="text-[10px] text-ivory-dim truncate">{p.techStack}</p>}
-                  </div>
-                  {p.githubUrl && (
-                    <a href={p.githubUrl} target="_blank" rel="noopener noreferrer"
-                      className="text-ivory-dim hover:text-gold transition-colors" title="Open repo">
-                      <ExternalLink size={12} />
-                    </a>
-                  )}
-                  <button
-                    onClick={() => removeMasterProject(p.id)}
-                    disabled={removing === p.id}
-                    className="text-ivory-dim hover:text-crimson transition-colors disabled:opacity-50"
-                    title="Remove from Master"
-                  >
-                    {removing === p.id ? <Spinner size={11} tone="current" /> : <Trash2 size={12} />}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <p className="text-ivory/45 text-xs mb-3">Add by title + credential link — saved straight into your Master.</p>
+            <div className="space-y-2">
+              <input
+                value={certTitle}
+                onChange={(e) => setCertTitle(e.target.value)}
+                placeholder="Title — e.g. AWS Certified Solutions Architect"
+                className="input-base w-full !text-sm"
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  value={certUrl}
+                  onChange={(e) => setCertUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && submitCert()}
+                  placeholder="Credential URL (optional)"
+                  className="input-base flex-1 !text-sm"
+                />
+                <button
+                  onClick={submitCert}
+                  disabled={!certTitle.trim() || addingCert}
+                  className="btn-primary !px-4 !py-2.5 !text-xs disabled:opacity-50 flex-shrink-0"
+                >
+                  {addingCert ? <Spinner size={13} tone="current" /> : <Plus size={13} />} Add
+                </button>
+              </div>
+            </div>
+            {certError && <p className="text-[11px] text-crimson mt-2">{certError}</p>}
+
+            {masterCerts.length > 0 ? (
+              <ul className="mt-4 space-y-1.5">
+                {masterCerts.map((c) => (
+                  <li key={c.id} className="flex items-center gap-2 rounded-lg border border-ink-700/60 bg-ink-900/40 px-3 py-2">
+                    <Award size={13} className="text-gold/70 flex-shrink-0" />
+                    <span className="text-xs text-ivory flex-1 min-w-0 truncate">{c.text}</span>
+                    {c.credentialUrl && (
+                      <a href={c.credentialUrl} target="_blank" rel="noopener noreferrer"
+                        className="text-ivory-dim hover:text-gold transition-colors" title="Open credential">
+                        <ExternalLink size={12} />
+                      </a>
+                    )}
+                    <button
+                      onClick={() => removeCert(c.id)}
+                      disabled={removingCert === c.id}
+                      className="text-ivory-dim hover:text-crimson transition-colors disabled:opacity-50"
+                      title="Remove"
+                    >
+                      {removingCert === c.id ? <Spinner size={11} tone="current" /> : <Trash2 size={12} />}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-ivory/35 text-xs text-center py-3 border border-dashed border-ink-700/60 rounded-lg">No certifications yet.</p>
+            )}
           </section>
-        )}
+
+          {/* Projects in Master */}
+          <section className="card">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="w-7 h-7 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center flex-shrink-0"><FolderGit2 size={14} className="text-gold" /></span>
+              <h2 className="font-display font-bold text-sm flex items-center gap-2">
+                Projects in Master
+                {masterProjects.length > 0 && <span className="text-[10px] font-mono text-ivory-dim">{masterProjects.length}</span>}
+              </h2>
+            </div>
+            {masterProjects.length > 0 ? (
+              <ul className="space-y-1.5">
+                {masterProjects.map((p) => (
+                  <li key={p.id} className="flex items-center gap-2 rounded-lg border border-ink-700/60 bg-ink-900/40 px-3 py-2">
+                    <FolderGit2 size={13} className="text-gold/70 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-ivory truncate">{p.name || 'Untitled project'}</p>
+                      {p.techStack && <p className="text-[10px] text-ivory-dim truncate">{p.techStack}</p>}
+                    </div>
+                    {p.githubUrl && (
+                      <a href={p.githubUrl} target="_blank" rel="noopener noreferrer"
+                        className="text-ivory-dim hover:text-gold transition-colors" title="Open repo">
+                        <ExternalLink size={12} />
+                      </a>
+                    )}
+                    <button
+                      onClick={() => removeMasterProject(p.id)}
+                      disabled={removing === p.id}
+                      className="text-ivory-dim hover:text-crimson transition-colors disabled:opacity-50"
+                      title="Remove from Master"
+                    >
+                      {removing === p.id ? <Spinner size={11} tone="current" /> : <Trash2 size={12} />}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-ivory/35 text-xs text-center py-3 border border-dashed border-ink-700/60 rounded-lg">
+                {connected ? 'Add a GitHub project above to get started.' : 'Connect GitHub to add projects.'}
+              </p>
+            )}
+          </section>
+        </div>
       </main>
 
       {craftRepo && (

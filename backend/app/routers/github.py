@@ -28,6 +28,8 @@ from ..schemas import (
     GithubRepoOut,
     GithubReposIn,
     GithubReposOut,
+    GithubSummaryIn,
+    GithubSummaryOut,
     GithubTreeFile,
     GithubTreeIn,
     GithubTreeOut,
@@ -272,6 +274,38 @@ def _build_digest(metadata_text: str, readme: str, fetched: list[tuple[str, str]
     return "\n\n".join(parts)[:_DIGEST_CHAR_LIMIT]
 
 
+def _readme_blurb(readme: str, limit: int = 180) -> str:
+    """First meaningful prose from a README, stripped of markdown — a short card
+    blurb for repos with no GitHub 'About'. Skips headings, badges, images,
+    HTML, lists, and rules."""
+    if not readme:
+        return ""
+    text = re.sub(r"```.*?```", " ", readme, flags=re.DOTALL)  # drop code blocks
+    parts: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if (
+            not line
+            or line[0] in "#>|"
+            or line.startswith(("![", "<", "- ", "* ", "+ "))
+            or re.fullmatch(r"[-=*_]{3,}", line)
+        ):
+            continue
+        line = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", line)      # images
+        line = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", line)  # links -> text
+        line = re.sub(r"<[^>]+>", "", line)                    # html tags
+        line = re.sub(r"[*_`#]", "", line).strip()             # inline emphasis
+        if len(line) < 12:
+            continue
+        parts.append(line)
+        if len(" ".join(parts)) >= limit:
+            break
+    blurb = " ".join(parts).strip()
+    if len(blurb) > limit:
+        blurb = blurb[:limit].rsplit(" ", 1)[0].rstrip() + "…"
+    return blurb
+
+
 # ── Routes ───────────────────────────────────────────────────────────────────
 @router.post("/repos", response_model=GithubReposOut)
 def github_repos(
@@ -317,6 +351,21 @@ def github_repos(
         ) from exc
 
     return GithubReposOut(repos=repos)
+
+
+@router.post("/readme-summary", response_model=GithubSummaryOut)
+def github_readme_summary(
+    payload: GithubSummaryIn, current_user: User = Depends(get_current_user),
+) -> GithubSummaryOut:
+    """A short README-derived blurb for a single repo — used to fill cards whose
+    GitHub 'About' is empty. Best-effort: returns '' if there's no README."""
+    full_name = _validate_full_name(payload.full_name)
+    try:
+        with httpx.Client(timeout=15.0, headers=_gh_headers()) as client:
+            readme = _fetch_readme(client, full_name)
+    except httpx.HTTPError:
+        return GithubSummaryOut(summary="")
+    return GithubSummaryOut(summary=_readme_blurb(readme))
 
 
 @router.post("/project/tree", response_model=GithubTreeOut)

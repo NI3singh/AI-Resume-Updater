@@ -240,3 +240,11 @@ class GithubRefineOut(BaseModel):
     bullets: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     rationale: str = ""
+
+
+class GithubSummaryIn(BaseModel):
+    full_name: str = Field(min_length=1, max_length=200)
+
+
+class GithubSummaryOut(BaseModel):
+    summary: str = ""   # short blurb derived from the README (for cards w/o an About)
