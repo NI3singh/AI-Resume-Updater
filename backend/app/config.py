@@ -37,7 +37,9 @@ class Settings(BaseSettings):
     upload_max_bytes: int = 5 * 1024 * 1024  # 5 MB max upload
     parse_text_limit: int = 16000            # chars of extracted text sent to the LLM
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # `extra="ignore"` lets .env carry keys this model doesn't declare (e.g.
+    # SOURCE_DATABASE_URL used only by the data-migration script) without error.
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @field_validator("database_url")
     @classmethod
