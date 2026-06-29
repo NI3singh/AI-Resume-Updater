@@ -201,7 +201,7 @@ export default function ProjectCraftDialog({ repo, onAdd, onClose }: Props) {
               <Spinner size={40} />
               <p className="text-ivory text-sm font-medium mt-3">Reading your code…</p>
               <p className="text-ivory/40 text-xs mt-1">
-                Analyzing {Math.min(selected.size, MAX_FILES)} file{selected.size === 1 ? '' : 's'} + README — reasoning models take ~15–40s
+                Analyzing {Math.min(selected.size, MAX_FILES)} file{selected.size === 1 ? '' : 's'} + README, then fact-checking the draft — reasoning models take ~30–60s
               </p>
             </div>
           )}
@@ -292,7 +292,7 @@ export default function ProjectCraftDialog({ repo, onAdd, onClose }: Props) {
                       <textarea
                         value={b}
                         onChange={(e) => setBullet(k, e.target.value)}
-                        rows={2}
+                        rows={3}
                         className="input-base flex-1 !text-[11px] !leading-relaxed resize-y min-h-[44px] !py-1.5 !px-2"
                       />
                       <button onClick={() => removeBullet(k)} className="mt-1.5 text-ivory-dim hover:text-crimson transition-colors flex-shrink-0" title="Remove bullet"><Trash2 size={12} /></button>
@@ -329,14 +329,14 @@ export default function ProjectCraftDialog({ repo, onAdd, onClose }: Props) {
 
               {/* Refine with a comment */}
               <div className="border-t border-ink-700/50 pt-3">
-                <label className="text-[10px] uppercase tracking-wide text-ink-500 mb-1.5 block">Want changes or something added? Tell the AI</label>
+                <label className="text-[10px] uppercase tracking-wide text-ink-500 mb-1.5 block">Edit with a comment — keep, change, add or remove bullets</label>
                 <div className="flex items-start gap-2">
                   <textarea
                     value={instruction}
                     onChange={(e) => setInstruction(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !regenerating) regenerate(); }}
                     rows={2}
-                    placeholder="e.g. emphasize the ML pipeline · mention WebSockets · shorter · highlight the CI/CD"
+                    placeholder="e.g. keep bullets 1–3 and add a 4th about Docker deployment · make it 3 bullets · merge the last two · emphasize the ML pipeline"
                     className="input-base flex-1 !text-[11px] !leading-relaxed resize-y min-h-[40px]"
                   />
                   <button
@@ -349,7 +349,7 @@ export default function ProjectCraftDialog({ repo, onAdd, onClose }: Props) {
                   </button>
                 </div>
                 <p className="text-[10px] text-ivory/35 mt-1 leading-relaxed">
-                  Grounded in your code — facts/numbers not in the repo (or your note) are stripped. (⌘/Ctrl+Enter)
+                  Agentic — say what to keep, change, add, or remove and only that changes. Grounded in your code; facts/numbers not in the repo (or your note) are stripped. (⌘/Ctrl+Enter)
                 </p>
               </div>
             </div>
