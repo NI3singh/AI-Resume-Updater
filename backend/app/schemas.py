@@ -53,8 +53,11 @@ class RenameIn(BaseModel):
 
 class ForkIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    # Optional: fork from this owned resume instead of the master. Any version
+    # (master or branch) can be forked; falls back to the master when omitted.
+    source_id: uuid.UUID | None = None
     # Optional content overrides: when provided, the new branch is created with
-    # this data instead of a copy of the master (used by the Transform feature).
+    # this data instead of a copy of the source (used by the Transform feature).
     resume_data: dict[str, Any] | None = None
     section_config: list[Any] | None = None
 

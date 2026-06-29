@@ -93,21 +93,26 @@ export function useResumes() {
     }
   }, []);
 
-  // ── Fork from master (create a new version) ────────────────────────────────
+  // ── Fork a resume (create a new version) ───────────────────────────────────
+  // Defaults to forking the master; pass opts.sourceId to fork any version.
   // With resumeData/sectionConfig the branch is created with that content
-  // instead of a master copy (used by Transform's "Save as new branch").
-  const forkFromMaster = useCallback(async (
+  // instead of a source copy (used by Transform's "Save as new branch").
+  const forkResume = useCallback(async (
     versionName: string,
-    resumeData?: ResumeData,
-    sectionConfig?: SectionConfig[],
+    opts: {
+      sourceId?: string;
+      resumeData?: ResumeData;
+      sectionConfig?: SectionConfig[];
+    } = {},
   ): Promise<ResumeRecord | null> => {
     try {
       const created = await api<ResumeRecord>('/resumes/fork', {
         method: 'POST',
         body: JSON.stringify({
           name: versionName,
-          ...(resumeData ? { resume_data: resumeData } : {}),
-          ...(sectionConfig ? { section_config: sectionConfig } : {}),
+          ...(opts.sourceId ? { source_id: opts.sourceId } : {}),
+          ...(opts.resumeData ? { resume_data: opts.resumeData } : {}),
+          ...(opts.sectionConfig ? { section_config: opts.sectionConfig } : {}),
         }),
       });
       setResumes(prev => [...prev, created]);
@@ -167,6 +172,6 @@ export function useResumes() {
 
   return {
     resumes, activeResume, loading, saveStatus,
-    save, rename, forkFromMaster, restoreToMaster, deleteResume, switchTo,
+    save, rename, forkResume, restoreToMaster, deleteResume, switchTo,
   };
 }

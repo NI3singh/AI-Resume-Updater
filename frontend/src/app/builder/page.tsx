@@ -43,7 +43,7 @@ function BuilderContent() {
   const { user, loading: authLoading, signOut } = useAuth();
   const {
     resumes, activeResume, loading: resumesLoading, saveStatus,
-    save, rename, forkFromMaster, restoreToMaster, deleteResume, switchTo,
+    save, rename, forkResume, restoreToMaster, deleteResume, switchTo,
   } = useResumes();
 
   useEffect(() => {
@@ -311,7 +311,7 @@ function BuilderContent() {
       });
       if (!proceed) return false;
     }
-    const created = await forkFromMaster(name, merged, branchConfig);
+    const created = await forkResume(name, { resumeData: merged, sectionConfig: branchConfig });
     if (!created) return false;
     setBuilderMode('manual');
     setActiveSection('personal');
@@ -435,7 +435,7 @@ function BuilderContent() {
               resumes={resumes}
               activeResume={activeResume}
               onSwitch={switchTo}
-              onFork={async (name) => { await forkFromMaster(name); }}
+              onFork={async (name, sourceId) => { await forkResume(name, { sourceId: sourceId ?? undefined }); }}
               onDelete={deleteResume}
               onRename={rename}
               onRestoreToMaster={(id) => restoreToMaster(id)}
