@@ -26,6 +26,7 @@ export interface TransformStep {
   asks_readme: boolean;      // project steps may request the project README (Phase 2)
   asks_related_work: boolean;// experience steps may request JD-related work notes (Phase 2)
   recommend_change: boolean;
+  recommend_drop: boolean;   // entry is irrelevant to the JD — offer to drop it (entries phase)
   reason: string;
 }
 
@@ -89,6 +90,9 @@ export interface TailorSectionArgs {
   kind: TransformStep['kind'];
   /** The single ORIGINAL unit (summary step -> { summary: "..." }). */
   entry: unknown;
+  /** The CURRENT draft being refined (bullets/text/summary) — enables surgical,
+   *  stateful edits: a change request edits THIS, not the original. */
+  current?: UnitProposal;
   /** Optional grounding text (e.g. a pasted README) — allows its facts/numbers. */
   sources?: string[];
   /** Optional user comment steering a regeneration (tone/length/emphasis). */
@@ -105,6 +109,7 @@ export async function tailorSection(args: TailorSectionArgs): Promise<SectionPro
       company: args.company,
       kind: args.kind,
       entry: args.entry,
+      current: args.current ?? {},
       sources: args.sources ?? [],
       instruction: args.instruction ?? '',
     }),

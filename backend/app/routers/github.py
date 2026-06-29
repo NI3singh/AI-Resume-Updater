@@ -34,7 +34,7 @@ from ..schemas import (
     GithubTreeIn,
     GithubTreeOut,
 )
-from ..transform_guard import guard_unit
+from ..transform_guard import guard_unit, resolve_bullet_ops
 
 router = APIRouter(prefix="/github", tags=["github"])
 
@@ -364,48 +364,6 @@ def _readme_blurb(readme: str, limit: int = 180) -> str:
     return blurb
 
 
-def _resolve_bullet_ops(raw: Any, current: list[str]) -> list[str]:
-    """Resolve the refine model's edit ops into the final ordered bullet list.
-
-    Each op is one of:
-      {"op":"keep","index":N}                -> ``current[N]`` VERBATIM
-      {"op":"edit"/"replace","index":N,"text"}-> the new text (or current[N] if blank)
-      {"op":"add"/"new","text":"..."}         -> the new text
-    A 'keep' resolves to the original bullet so untouched bullets cannot drift.
-    Plain strings are accepted too (treated as final bullets) so a model that
-    ignores the op format still yields a usable result.
-    """
-    if not isinstance(raw, list):
-        return []
-    out: list[str] = []
-    for item in raw:
-        if isinstance(item, str):
-            text = item.strip()
-            if text:
-                out.append(text)
-            continue
-        if not isinstance(item, dict):
-            continue
-        op = str(item.get("op") or "").strip().lower()
-        idx = item.get("index")
-        idx = idx if isinstance(idx, int) else None
-        text = str(item.get("text") or "").strip()
-        if op == "keep":
-            if idx is not None and 0 <= idx < len(current):
-                out.append(current[idx])
-        elif op in ("edit", "replace", "rewrite", "update"):
-            if text:
-                out.append(text)
-            elif idx is not None and 0 <= idx < len(current):
-                out.append(current[idx])
-        elif op in ("add", "new", "insert", "append"):
-            if text:
-                out.append(text)
-        elif text:  # unknown/absent op but carries text — keep it
-            out.append(text)
-    return out
-
-
 def _verify_bullets(bullets: list[str], digest: str, notes: str) -> tuple[list[str], list[str]]:
     """Drop draft bullets asserting a concrete claim the sources don't support.
 
@@ -685,7 +643,7 @@ def github_project_refine(
     except LLMError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
-    proposed = _resolve_bullet_ops(result.get("bullets"), current)
+    proposed = resolve_bullet_ops(result.get("bullets"), current)
     guarded, warnings = guard_unit(
         "projects", {"bullets": current}, {"bullets": proposed}, sources=sources,
     )

@@ -43,7 +43,7 @@ from ..schemas import (
     VerifyOut,
     VerifySummary,
 )
-from ..transform_guard import guard_unit, prepare_for_llm
+from ..transform_guard import guard_unit, prepare_for_llm, resolve_bullet_ops
 
 router = APIRouter(prefix="/tools", tags=["tools"])
 
@@ -202,6 +202,40 @@ SECTION_SYSTEM = (
     '  "no_change_recommended": false\n'
     "}\n"
     "Include only the single content key for this unit's kind."
+)
+
+# Interactive Transform REFINE: the unit was ALREADY tailored and the user asks
+# for a specific change. Edit the CURRENT version surgically — change ONLY what's
+# asked, keep the rest verbatim — instead of re-writing from scratch (which is
+# what made every regeneration replace the whole text or repeat itself).
+SECTION_REFINE_SYSTEM = (
+    "You are an agentic resume editor. You are given ONE resume unit that was "
+    "ALREADY tailored (its CURRENT version), the target job description (JD), the "
+    "ORIGINAL unit (for grounding facts only), optional SOURCES, and a USER CHANGE "
+    "REQUEST. Apply the request PRECISELY and MINIMALLY: change ONLY what it asks "
+    "and keep everything else EXACTLY as it is.\n\n"
+    "IF THE UNIT IS BULLETS (experience / projects / extracurricular): return "
+    '"bullets" as a list of edit OPERATIONS over the CURRENT bullets:\n'
+    '  {"op":"keep","index":N}              keep current bullet N EXACTLY as-is\n'
+    '  {"op":"edit","index":N,"text":"..."} replace current bullet N with new text\n'
+    '  {"op":"add","text":"..."}            add a brand-new bullet\n'
+    "The final bullets are EXACTLY the ops you emit, in order; omit a bullet to "
+    "delete it. 'index' is 0-based — the user counts bullets from 1, so 'bullet 2' "
+    "is index 1. If the request only touches one bullet, emit 'keep' for ALL the "
+    "others and 'edit' only that one. NEVER reword a bullet the user didn't ask "
+    "you to touch.\n\n"
+    'IF THE UNIT IS TEXT ("summary" or an education "text"): return the full edited '
+    "text with ONLY the requested change applied and every other sentence/word "
+    "kept identical.\n\n"
+    "GROUNDING (always): never invent skills, tools, employers, outcomes, metrics, "
+    "or dates. Use only facts already in the CURRENT version, the ORIGINAL unit, or "
+    "the SOURCES. Do not introduce a number/percentage/date that isn't in those. "
+    "If the request needs a fact you don't have, apply the rest and skip that part. "
+    "You MUST produce a genuinely different result that reflects the request.\n\n"
+    "Return ONLY a JSON object (no markdown) with the ONE content key for this unit "
+    '(either "bullets" as ops, or "text"/"summary"), plus: "rationale" (one short '
+    'sentence), "covered_keywords" [], "missing_keywords" [], '
+    '"no_change_recommended" false.'
 )
 
 
@@ -445,12 +479,17 @@ PLAN_SYSTEM = (
     "tailor for THIS job.\n\n"
     "Return ONLY a JSON object (no markdown, no commentary):\n"
     "{\n"
-    '  "units": [ { "i": <index>, "recommend_change": true, "reason": "<= 12 words why" } ],\n'
+    '  "units": [ { "i": <index>, "recommend_change": true, "recommend_drop": false, "reason": "<= 12 words why" } ],\n'
     '  "sections": [ { "section": "<section id>", "keep": true, "reason": "<= 12 words why" } ],\n'
     '  "missing_keywords": ["JD requirements the resume as a whole does not show"]\n'
     "}\n"
     "For UNITS: recommend_change=false when a unit is already well aligned with "
-    "the JD, or is irrelevant to it, so the user can safely skip it.\n"
+    "the JD, or is irrelevant to it, so the user can safely skip it. "
+    "recommend_drop=true ONLY for an experience / project / activity entry that "
+    "does NOT support this JD at all and the candidate should consider removing it "
+    "(e.g. a pure data-analytics project for an ML-engineer role); default false. "
+    "NEVER set recommend_drop on a summary or education unit. Be conservative — a "
+    "weakly-relevant entry is recommend_change=true, not a drop.\n"
     "For SECTIONS: keep=false ONLY when a whole section clearly does not help this "
     "application and the candidate should consider dropping it (e.g. publications "
     "for a non-research role, extracurriculars for a senior role). Be conservative "
@@ -525,6 +564,9 @@ def _enrich_plan(
                 continue
             if 0 <= idx < len(steps):
                 steps[idx].recommend_change = bool(u.get("recommend_change", True))
+                # Only entry kinds are droppable; never the summary/education.
+                if steps[idx].kind in ("experience", "projects", "extracurricular"):
+                    steps[idx].recommend_drop = bool(u.get("recommend_drop", False))
                 reason = str(u.get("reason") or "").strip()
                 if reason:
                     steps[idx].reason = reason[:140]
@@ -633,6 +675,88 @@ def transform_section(
     ]
     instruction = payload.instruction.strip()[: settings.parse_text_limit]
 
+    # ── Surgical refine ──────────────────────────────────────────────────────
+    # When there's a change request AND a current draft, edit THAT draft (not the
+    # original) and change ONLY what's asked: bullets via keep/edit/add ops
+    # resolved server-side (so untouched bullets stay verbatim), text via a
+    # minimal rewrite. This is what makes "change bullet 2" / "shorten this part"
+    # surgical, and stops the regenerate-returns-identical loop (each refine acts
+    # on the evolving draft, not the same original every time).
+    is_bullet_kind = payload.kind in ("experience", "projects", "extracurricular")
+    current = payload.current if isinstance(payload.current, dict) else {}
+    cur_bullets = (
+        [b for b in (current.get("bullets") or []) if isinstance(b, str) and b.strip()]
+        if is_bullet_kind else []
+    )
+    cur_text = "" if is_bullet_kind else str(
+        current.get("summary") or current.get("text") or current.get("highlight") or ""
+    ).strip()
+
+    if instruction and (cur_bullets or cur_text):
+        rheader = (
+            f"JOB TITLE: {payload.job_title.strip() or '(not provided)'}\n"
+            f"COMPANY: {payload.company.strip() or '(not provided)'}\n"
+            f"UNIT KIND: {payload.kind}\n"
+            "\n*** USER CHANGE REQUEST (apply EXACTLY and MINIMALLY — change only "
+            f"this, keep everything else verbatim): {instruction}\n"
+        )
+        rbody = "\nJOB DESCRIPTION:\n" + jd
+        if is_bullet_kind:
+            numbered = "\n".join(f"[{k}] {b}" for k, b in enumerate(cur_bullets))
+            rbody += (
+                "\n\nCURRENT BULLETS (edit these; index is 0-based, so the user's "
+                "'bullet 1' is index 0):\n" + numbered
+            )
+        else:
+            rbody += "\n\nCURRENT TEXT (edit this):\n" + cur_text
+        rbody += (
+            "\n\nORIGINAL UNIT (grounding facts only — do not copy wholesale):\n"
+            + json.dumps(payload.entry, ensure_ascii=False)
+        )
+        if sources:
+            rbody += (
+                "\n\nSOURCES (facts and numbers appearing here are allowed):\n"
+                + "\n\n---\n\n".join(sources)
+            )
+        rbody += f"\n\nREMINDER — apply ONLY this change, keep the rest verbatim: {instruction}"
+        try:
+            result = chat_json(SECTION_REFINE_SYSTEM, rheader + rbody, max_tokens=4096, temperature=0.4)
+        except LLMNotConfigured as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        except LLMError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+        # The original unit's own facts/numbers are allowed too (the draft was
+        # derived from it) — add it to the guard's grounding sources.
+        refine_sources = sources + [json.dumps(payload.entry, ensure_ascii=False)]
+        if is_bullet_kind:
+            proposed = resolve_bullet_ops(result.get("bullets"), cur_bullets)
+            guarded, warnings = guard_unit(
+                payload.kind, {"bullets": cur_bullets}, {"bullets": proposed}, sources=refine_sources,
+            )
+        else:
+            text_out = str(
+                result.get("summary") or result.get("text") or result.get("highlight") or ""
+            ).strip()
+            if payload.kind == "summary":
+                guarded, warnings = guard_unit(
+                    "summary", {"summary": cur_text}, {"summary": text_out}, sources=refine_sources,
+                )
+            else:  # education highlight — guard on "highlight", return as "text"
+                g, warnings = guard_unit(
+                    "education", {"highlight": cur_text}, {"highlight": text_out}, sources=refine_sources,
+                )
+                guarded = {"text": g.get("highlight", cur_text)}
+        return TransformSectionOut(
+            proposal=guarded,
+            rationale=str(result.get("rationale") or "").strip(),
+            covered_keywords=_clean_keywords(result.get("covered_keywords")),
+            missing_keywords=_clean_keywords(result.get("missing_keywords")),
+            warnings=warnings,
+            no_change_recommended=bool(result.get("no_change_recommended")),
+        )
+
+    # ── Tailor (initial generation) ──────────────────────────────────────────
     # The change request is placed BOTH up top and at the very end — for the
     # summary step the grounding "SOURCES" block is the whole résumé, so an
     # instruction tucked only at the bottom would get buried.

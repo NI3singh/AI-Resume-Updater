@@ -145,6 +145,7 @@ class TransformStep(BaseModel):
     asks_readme: bool = False       # project steps may request the project's README (Phase 2 UI)
     asks_related_work: bool = False # experience steps may request JD-related work notes (Phase 2 UI)
     recommend_change: bool = True
+    recommend_drop: bool = False    # entry is irrelevant to the JD — offer to drop it (entries phase)
     reason: str = ""
 
 
@@ -160,6 +161,7 @@ class TransformSectionIn(BaseModel):
     company: str = Field(default="", max_length=200)
     kind: str
     entry: dict[str, Any] = Field(default_factory=dict)   # the single original unit (summary -> {"summary": "..."})
+    current: dict[str, Any] = Field(default_factory=dict) # the CURRENT draft being refined (bullets/text/summary) — enables surgical edits
     sources: list[str] = Field(default_factory=list)      # README / notes text — grounds allowed facts & numbers
     instruction: str = Field(default="", max_length=2000) # optional user refine comment for a regeneration
 
