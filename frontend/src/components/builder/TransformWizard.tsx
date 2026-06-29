@@ -14,6 +14,7 @@ import {
   planTransform, tailorSection, TransformStep, SectionProposal, SectionAdvice,
 } from '@/lib/resumeTransform';
 import { Spinner } from '@/components/ui/Spinner';
+import ReorderableBullets from '@/components/builder/ReorderableBullets';
 
 interface Props {
   data: ResumeData;
@@ -244,18 +245,10 @@ export default function TransformWizard({
   // ── Draft editing ───────────────────────────────────────────────────────────
   const setDraftText = (val: string) =>
     setDrafts((d) => ({ ...d, [i]: { ...d[i], text: val } }));
-  const setBullet = (k: number, val: string) =>
-    setDrafts((d) => {
-      const b = [...(d[i]?.bullets ?? [])]; b[k] = val;
-      return { ...d, [i]: { ...d[i], bullets: b } };
-    });
+  const setBullets = (bullets: string[]) =>
+    setDrafts((d) => ({ ...d, [i]: { ...d[i], bullets } }));
   const addBullet = () =>
     setDrafts((d) => ({ ...d, [i]: { ...d[i], bullets: [...(d[i]?.bullets ?? []), ''] } }));
-  const removeBullet = (k: number) =>
-    setDrafts((d) => {
-      const b = (d[i]?.bullets ?? []).filter((_, idx) => idx !== k);
-      return { ...d, [i]: { ...d[i], bullets: b } };
-    });
 
   const acceptedCount = Object.values(statuses).filter((s) => s === 'accepted').length;
 
@@ -538,25 +531,31 @@ export default function TransformWizard({
                       </p>
                       {isBullets ? (
                         <div className="space-y-1.5">
-                          {(draft.bullets ?? []).map((b, k) => (
-                            <div key={k} className="flex items-start gap-1.5">
-                              <textarea
-                                value={b}
-                                onChange={(e) => setBullet(k, e.target.value)}
-                                rows={2}
-                                className="input-base flex-1 !text-[11px] !leading-relaxed resize-y min-h-[44px] !py-1.5 !px-2"
-                              />
-                              {(draft.bullets ?? []).length > 1 && (
-                                <button
-                                  onClick={() => removeBullet(k)}
-                                  className="mt-1.5 text-ivory-dim hover:text-crimson transition-colors flex-shrink-0 cursor-pointer"
-                                  title="Remove bullet"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              )}
-                            </div>
-                          ))}
+                          <ReorderableBullets
+                            bullets={draft.bullets ?? []}
+                            onChange={setBullets}
+                            className="space-y-1.5"
+                            renderBullet={({ value, setValue, remove, canRemove, dragHandle }) => (
+                              <div className="flex items-start gap-1.5">
+                                {dragHandle}
+                                <textarea
+                                  value={value}
+                                  onChange={(e) => setValue(e.target.value)}
+                                  rows={2}
+                                  className="input-base flex-1 !text-[11px] !leading-relaxed resize-y min-h-[44px] !py-1.5 !px-2"
+                                />
+                                {canRemove && (
+                                  <button
+                                    onClick={remove}
+                                    className="mt-1.5 text-ivory-dim hover:text-crimson transition-colors flex-shrink-0 cursor-pointer"
+                                    title="Remove bullet"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          />
                           <button
                             onClick={addBullet}
                             className="flex items-center gap-1 text-[10px] text-gold hover:text-gold-light transition-colors cursor-pointer"

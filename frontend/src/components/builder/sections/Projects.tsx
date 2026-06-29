@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ResumeData, ProjectEntry } from '@/lib/types';
 import ReorderableList from '@/components/builder/ReorderableList';
+import BulletListField from '@/components/builder/BulletListField';
 
 interface Props { data: ResumeData; onChange: (d: ResumeData) => void; }
 
@@ -28,12 +29,6 @@ export default function ProjectsSection({ data, onChange }: Props) {
   };
   const update = (id: string, patch: Partial<ProjectEntry>) =>
     onChange({ ...data, projects: data.projects.map(p => p.id === id ? { ...p, ...patch } : p) });
-
-  const updateBullet = (id: string, idx: number, value: string) => {
-    const proj = data.projects.find(p => p.id === id)!;
-    const b = [...proj.bullets]; b[idx] = value;
-    update(id, { bullets: b });
-  };
 
   return (
     <div>
@@ -113,19 +108,12 @@ export default function ProjectsSection({ data, onChange }: Props) {
                         <button onClick={() => update(proj.id, { bullets: [...proj.bullets, ''] })} className="text-[10px] text-gold hover:text-gold-light">+ Add</button>
                       </div>
                       <p className="text-[9px] font-mono text-ink-500 mb-2">Wrap a word in **double asterisks** for bold.</p>
-                      <div className="flex flex-col gap-1.5">
-                        {proj.bullets.map((b, bi) => (
-                          <div key={bi} className="bullet-item">
-                            <textarea className="input-base flex-1 min-h-[56px] resize-none text-[11px] leading-relaxed"
-                              value={b} onChange={e => updateBullet(proj.id, bi, e.target.value)}
-                              placeholder="Built a responsive web app serving 1,000+ monthly users" />
-                            {proj.bullets.length > 1 && (
-                              <button onClick={() => update(proj.id, { bullets: proj.bullets.filter((_, i) => i !== bi) })}
-                                className="mt-2 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0"><Trash2 size={11} /></button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                      <BulletListField
+                        bullets={proj.bullets}
+                        onChange={(bullets) => update(proj.id, { bullets })}
+                        placeholder="Built a responsive web app serving 1,000+ monthly users"
+                        minH={56}
+                      />
                     </div>
 
                   </div>

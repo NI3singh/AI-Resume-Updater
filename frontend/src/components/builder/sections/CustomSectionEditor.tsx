@@ -8,6 +8,7 @@ import { ResumeData, CustomFieldDef, CustomEntry, LinkValue, DateRangeValue, Mar
 import MonthYearPicker from '@/components/builder/MonthYearPicker';
 import { formatMark } from '@/lib/latexTemplate';
 import ReorderableList from '@/components/builder/ReorderableList';
+import BulletListField from '@/components/builder/BulletListField';
 
 // Value-box placeholders for the Number / Marks field, per chosen format.
 const MARK_PLACEHOLDER: Record<string, string> = {
@@ -39,22 +40,7 @@ function FieldInput({ field, value, onChange }: {
           <button onClick={() => onChange([...bullets, ''])} className="text-[10px] text-gold hover:text-gold-light">+ Add</button>
         </div>
         <p className="text-[9px] font-mono text-ink-500 mb-2">Wrap a word in **double asterisks** for bold.</p>
-        <div className="flex flex-col gap-1.5">
-          {bullets.map((b, i) => (
-            <div key={i} className="bullet-item">
-              <textarea
-                className="input-base flex-1 min-h-[48px] resize-none text-[11px] leading-relaxed"
-                value={b}
-                onChange={e => { const next = [...bullets]; next[i] = e.target.value; onChange(next); }}
-                placeholder="Detail or description..."
-              />
-              {bullets.length > 1 && (
-                <button onClick={() => onChange(bullets.filter((_, j) => j !== i))}
-                  className="mt-2 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0"><Trash2 size={11} /></button>
-              )}
-            </div>
-          ))}
-        </div>
+        <BulletListField bullets={bullets} onChange={onChange} placeholder="Detail or description..." />
       </div>
     );
   }
