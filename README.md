@@ -20,7 +20,7 @@ letter, and compile a pixel-perfect PDF in one click. No LaTeX knowledge needed.
 
 <div align="center">
 
-<a href="https://youtu.be/NFoiecE-uYs?si=tLaJnazA-xBl4AEt">
+<a href="https://youtu.be/Ln1NzEGeKtc">
   <img src="docs/tour-poster.png" alt="Watch the demo" width="820">
 </a>
 
