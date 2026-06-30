@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_ROW_HEIGHT_RULE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -206,15 +207,16 @@ def _clear_cell(cell) -> None:
 
 
 def _find_body_cell(doc):
-    """The body cell = the table cell holding the most text (the letter)."""
-    best, best_len = None, -1
+    """The body cell = the table cell holding the most text (the letter). Returns
+    ``(cell, row)`` so the caller can normalize the row's forced height."""
+    best, best_row, best_len = None, None, -1
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 n = len(cell.text)
                 if n > best_len:
-                    best, best_len = cell, n
-    return best
+                    best, best_row, best_len = cell, row, n
+    return best, best_row
 
 
 def _find_header(doc):
@@ -251,13 +253,33 @@ def _fill_template(content: CoverLetterContent, name: str) -> bytes:
         _set_paragraph_text(tagline_p, content.headerTitle.strip())
 
     # Body: rebuild from the generated content.
-    cell = _find_body_cell(doc)
+    cell, body_row = _find_body_cell(doc)
     if cell is None:
         raise HTTPException(status_code=500, detail="Cover letter template body cell not found.")
+    # The template's body row ships with a huge forced height (~11in) that pushes
+    # the letter onto a second page, plus a stray character in a spacer cell. Make
+    # the row auto-size, clear spacer junk, and top-align the body so the letter
+    # sits cleanly under the header rule.
+    if body_row is not None:
+        try:
+            body_row.height = None
+            body_row.height_rule = WD_ROW_HEIGHT_RULE.AUTO
+        except Exception:  # noqa: BLE001 — best-effort layout tidy-up
+            pass
+        for spacer in body_row.cells:
+            # Compare the underlying <w:tc> — row.cells returns fresh wrappers and
+            # the gridSpan'd body cell repeats, so object identity isn't reliable.
+            if spacer._tc is not cell._tc and spacer.text.strip():
+                spacer.text = ""
+    try:
+        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
+    except Exception:  # noqa: BLE001
+        pass
     _clear_cell(cell)
     left, right = WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.RIGHT
 
-    _add_para(cell, content.salutation.strip() or "Dear Hiring Team,", _HEAD_PT, align=left, bold_all=True)
+    salutation = _add_para(cell, content.salutation.strip() or "Dear Hiring Team,", _HEAD_PT, align=left, bold_all=True)
+    salutation.paragraph_format.space_before = Pt(24)  # consistent gap under the header rule
     _add_para(cell, "", _BODY_PT)
     if content.opening.strip():
         _add_para(cell, content.opening.strip(), _BODY_PT)
