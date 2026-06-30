@@ -45,7 +45,8 @@ _HEAD_PT = 14      # salutation, closing block (sign-off / name / signature)
 _SIG_FONT = "Courgette"  # the cursive signature line
 
 _DIGIT_RE = re.compile(r"\d[\d,.]*")
-_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
+# Inline formatting: **bold** and __underline__ (the app's conventions).
+_FMT_RE = re.compile(r"(\*\*[^*]+\*\*|__[^_]+__)")
 
 
 def _digits(text: str) -> set[str]:
@@ -155,31 +156,36 @@ def _resume_text(data: dict[str, Any]) -> str:
 
 
 # ── DOCX template fill ────────────────────────────────────────────────────────
-def _run(para, text: str, size: int, bold: bool, font_name: str | None) -> None:
+def _run(para, text: str, size: int, bold: bool, underline: bool, font_name: str | None) -> None:
     r = para.add_run(text)
     r.font.size = Pt(size)
     if bold:
         r.bold = True
+    if underline:
+        r.underline = True
     if font_name:
         r.font.name = font_name
 
 
-def _add_para(cell, text: str, size: int, *, align=None, bold_all: bool = False, font_name: str | None = None):
-    """Add a paragraph, parsing **bold** spans into bold runs; empty text => blank line."""
+def _add_para(cell, text: str, size: int, *, align=None, bold_all: bool = False,
+              underline_all: bool = False, font_name: str | None = None):
+    """Add a paragraph, parsing **bold** and __underline__ spans into formatted
+    runs; empty text => a blank line."""
     para = cell.add_paragraph()
     if align is not None:
         para.alignment = align
     if not text:
-        _run(para, "", size, False, None)
+        _run(para, "", size, bold_all, underline_all, font_name)
         return para
-    pos = 0
-    for m in _BOLD_RE.finditer(text):
-        if m.start() > pos:
-            _run(para, text[pos:m.start()], size, bold_all, font_name)
-        _run(para, m.group(1), size, True, font_name)
-        pos = m.end()
-    if pos < len(text):
-        _run(para, text[pos:], size, bold_all, font_name)
+    for seg in _FMT_RE.split(text):
+        if not seg:
+            continue
+        if seg.startswith("**") and seg.endswith("**"):
+            _run(para, seg[2:-2], size, True, underline_all, font_name)
+        elif seg.startswith("__") and seg.endswith("__"):
+            _run(para, seg[2:-2], size, bold_all, True, font_name)
+        else:
+            _run(para, seg, size, bold_all, underline_all, font_name)
     return para
 
 
@@ -272,7 +278,8 @@ def _fill_template(content: CoverLetterContent, name: str) -> bytes:
         _add_para(cell, name, _HEAD_PT, align=right, bold_all=True)
     sig = content.signatureName.strip() or name
     if sig:
-        _add_para(cell, sig, _HEAD_PT, align=right, bold_all=True, font_name=_SIG_FONT)
+        # The signature is the cursive Courgette name, underlined (matches the template).
+        _add_para(cell, sig, _HEAD_PT, align=right, bold_all=True, underline_all=True, font_name=_SIG_FONT)
 
     buf = io.BytesIO()
     doc.save(buf)

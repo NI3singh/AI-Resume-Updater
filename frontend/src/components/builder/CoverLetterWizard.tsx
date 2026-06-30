@@ -1,7 +1,7 @@
 // src/components/builder/CoverLetterWizard.tsx
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import {
@@ -24,6 +24,63 @@ interface Props {
 
 type Phase = 'generating' | 'review' | 'error';
 
+// Render **bold** and __underline__ spans as JSX (mirrors the DOCX renderer).
+function renderRich(text: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  const re = /(\*\*[^*]+\*\*|__[^_]+__)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let k = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const s = m[0];
+    if (s.startsWith('**')) out.push(<strong key={k++}>{s.slice(2, -2)}</strong>);
+    else out.push(<u key={k++}>{s.slice(2, -2)}</u>);
+    last = m.index + s.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/** A paper-like preview that approximates the downloaded letter. */
+function CoverLetterPreview({ content, name }: { content: CoverLetterContent; name: string }) {
+  const bullets = content.bullets.filter((b) => b.trim());
+  const closing = content.closing.filter((c) => c.trim());
+  return (
+    <div
+      className="rounded-lg bg-white text-black px-7 py-6 shadow-inner"
+      style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '12px', lineHeight: 1.55 }}
+    >
+      <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '0.01em' }}>{name || 'Your Name'}</div>
+      {content.headerTitle.trim() && <div style={{ marginTop: '2px' }}>{content.headerTitle}</div>}
+      <div style={{ borderTop: '1px solid rgba(0,0,0,0.25)', margin: '12px 0' }} />
+      <p style={{ fontWeight: 700, marginBottom: '10px' }}>{renderRich(content.salutation)}</p>
+      {content.opening.trim() && <p style={{ marginBottom: '10px' }}>{renderRich(content.opening)}</p>}
+      {content.bridge.trim() && <p style={{ marginBottom: '6px' }}>{renderRich(content.bridge)}</p>}
+      {bullets.length > 0 && (
+        <div style={{ marginBottom: '10px' }}>
+          {bullets.map((b, i) => (
+            <div key={i} style={{ display: 'flex', gap: '6px', marginBottom: '4px' }}>
+              <span>-</span>
+              <span>{renderRich(b)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {closing.map((c, i) => (
+        <p key={i} style={{ marginBottom: '10px' }}>{renderRich(c)}</p>
+      ))}
+      <div style={{ textAlign: 'right', marginTop: '18px' }}>
+        <div>{renderRich(content.signoff)}</div>
+        {name && <div style={{ fontWeight: 700 }}>{name}</div>}
+        <div style={{ fontFamily: "'Courgette', cursive", textDecoration: 'underline', fontSize: '17px', marginTop: '2px' }}>
+          {content.signatureName.trim() || name}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CoverLetterWizard({ data, jobDescription, company, jobTitle, onClose }: Props) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -38,6 +95,19 @@ export default function CoverLetterWizard({ data, jobDescription, company, jobTi
   const [regenerating, setRegenerating] = useState(false);
   const [downloading, setDownloading] = useState<'' | 'docx' | 'pdf'>('');
   const [downloadError, setDownloadError] = useState('');
+  const [view, setView] = useState<'edit' | 'preview'>('edit');
+
+  // Load the Courgette signature font so the preview shows the cursive signature.
+  useEffect(() => {
+    const id = 'courgette-font';
+    if (typeof document !== 'undefined' && !document.getElementById(id)) {
+      const link = document.createElement('link');
+      link.id = id;
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Courgette&display=swap';
+      document.head.appendChild(link);
+    }
+  }, []);
 
   const run = useCallback(async (refine: string) => {
     const res = await generateCoverLetter({ jobDescription, company, jobTitle, resumeData: data, instruction: refine });
@@ -167,8 +237,29 @@ export default function CoverLetterWizard({ data, jobDescription, company, jobTi
 
           {phase === 'review' && content && (
             <div className="space-y-3">
+              {/* Edit / Preview toggle */}
+              <div className="flex items-center gap-1 bg-ink-800/60 rounded-lg p-0.5 border border-ink-700/50 w-max">
+                <button
+                  onClick={() => setView('edit')}
+                  className={`px-3 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer ${view === 'edit' ? 'bg-ink-700 text-ivory shadow-sm' : 'text-ivory-muted hover:text-ivory'}`}
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => setView('preview')}
+                  className={`px-3 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer ${view === 'preview' ? 'bg-ink-700 text-ivory shadow-sm' : 'text-ivory-muted hover:text-ivory'}`}
+                >
+                  Preview
+                </button>
+              </div>
+
+              {view === 'preview' ? (
+                <CoverLetterPreview content={content} name={name.trim() || data.personal.name} />
+              ) : (
+              <>
               <p className="text-[10px] text-ivory/40 leading-relaxed">
-                Wrap a word in <span className="font-mono text-gold/80">**double asterisks**</span> for <strong>bold</strong>. Everything here is editable.
+                Wrap a word in <span className="font-mono text-gold/80">**double asterisks**</span> for <strong>bold</strong> or
+                {' '}<span className="font-mono text-gold/80">__double underscores__</span> for <u>underline</u>. Everything here is editable.
               </p>
 
               <div className="grid grid-cols-2 gap-2">
@@ -296,6 +387,8 @@ export default function CoverLetterWizard({ data, jobDescription, company, jobTi
                   Grounded in your résumé — facts and numbers are never invented. (⌘/Ctrl+Enter)
                 </p>
               </div>
+              </>
+              )}
             </div>
           )}
         </div>
