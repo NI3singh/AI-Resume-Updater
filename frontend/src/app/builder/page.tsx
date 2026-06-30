@@ -325,7 +325,8 @@ function BuilderContent() {
 
   const runScan = useCallback(async () => {
     if (!resumeData || scanning) return;
-    setScanOpen(true); setScanning(true); setScanError(''); setScanFixes([]); setScanAiOk(true);
+    // Keep any prior pop-up closed; only the green sweep shows while scanning.
+    setScanOpen(false); setScanning(true); setScanError(''); setScanFixes([]); setScanAiOk(true);
     setPreviewTab('preview');
     // Make sure a PDF is visible to sweep the scan line over (cosmetic).
     if (!pdfUrl && latexCode) {
@@ -345,6 +346,7 @@ function BuilderContent() {
       setScanError(err instanceof Error ? err.message : 'Could not scan the résumé. Please try again.');
     } finally {
       setScanning(false);
+      setScanOpen(true);   // reveal the results pop-up now that the scan is done
     }
   }, [resumeData, scanning, pdfUrl, latexCode]);
 
@@ -883,7 +885,6 @@ function BuilderContent() {
         {scanOpen && (
           <ScanResults
             fixes={scanFixes}
-            scanning={scanning}
             aiOk={scanAiOk}
             error={scanError}
             onApply={applyScanFix}
