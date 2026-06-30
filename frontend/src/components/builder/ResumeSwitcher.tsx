@@ -23,7 +23,7 @@ interface ResumeSwitcherProps {
   resumes: ResumeRecord[];
   activeResume: ResumeRecord | null;
   onSwitch: (id: string) => void;
-  onFork: (name: string) => Promise<void>;
+  onFork: (name: string, sourceId: string | null) => Promise<void>;
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onRestoreToMaster: (id: string) => void;
@@ -78,6 +78,7 @@ export default function ResumeSwitcher({
   const [mounted, setMounted] = useState(false);
   const [forking, setForking] = useState(false);
   const [forkName, setForkName] = useState('');
+  const [forkSourceId, setForkSourceId] = useState<string | null>(null);  // null → Master
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
 
@@ -113,11 +114,26 @@ export default function ResumeSwitcher({
     };
   }, [open]);
 
+  // Open the fork input seeded with a source (null = Master) and a default name.
+  const startFork = (sourceId: string | null, defaultName: string) => {
+    setForkSourceId(sourceId);
+    setForkName(defaultName);
+    setForking(true);
+    setEditingId(null);
+  };
+
+  const cancelFork = () => {
+    setForking(false);
+    setForkName('');
+    setForkSourceId(null);
+  };
+
   const handleFork = async () => {
     const name = forkName.trim();
     if (!name) return;
-    await onFork(name);
+    await onFork(name, forkSourceId);
     setForkName('');
+    setForkSourceId(null);
     setForking(false);
     setOpen(false);
   };
@@ -133,6 +149,10 @@ export default function ResumeSwitcher({
     if (name) onRename(id, name);
     setEditingId(null);
   };
+
+  const forkSourceName = forkSourceId
+    ? resumes.find((resume) => resume.id === forkSourceId)?.name ?? 'this version'
+    : 'Master';
 
   const panel = mounted ? createPortal(
     <AnimatePresence>
@@ -168,7 +188,7 @@ export default function ResumeSwitcher({
                     </p>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed" style={{ color: P.dim }}>
-                    Fork a copy from Master, then edit that version for each opportunity.
+                    Fork Master or any version into a separate copy, then tailor it per role.
                   </p>
                 </div>
                 <button
@@ -304,6 +324,17 @@ export default function ResumeSwitcher({
                     ) : (
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            startFork(resume.id, `${resume.name} copy`);
+                          }}
+                          className="rounded-md p-1.5 transition-colors"
+                          style={{ color: P.dim }}
+                          title={resume.is_master ? 'Fork Master into a new copy' : 'Fork this version into a new copy'}
+                        >
+                          <GitFork size={13} />
+                        </button>
+                        <button
                           onClick={(event) => startRename(resume, event)}
                           className="rounded-md p-1.5 transition-colors"
                           style={{ color: P.dim }}
@@ -347,43 +378,49 @@ export default function ResumeSwitcher({
 
             <div className="border-t p-3" style={{ borderColor: P.borderSoft, background: P.bgSoft }}>
               {forking ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    autoFocus
-                    value={forkName}
-                    onChange={(event) => setForkName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') handleFork();
-                      if (event.key === 'Escape') setForking(false);
-                    }}
-                    placeholder="e.g. Data Analyst - Google"
-                    className="min-w-0 flex-1 rounded-lg px-3 py-2 text-xs outline-none"
-                    style={{
-                      color: P.text,
-                      background: P.bg,
-                      border: `1px solid ${P.gold}88`,
-                    }}
-                  />
-                  <button
-                    onClick={handleFork}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg"
-                    style={{ color: P.jade, background: P.bg }}
-                    title="Create version"
-                  >
-                    <Check size={14} />
-                  </button>
-                  <button
-                    onClick={() => setForking(false)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg"
-                    style={{ color: P.crimson, background: P.bg }}
-                    title="Cancel"
-                  >
-                    <X size={14} />
-                  </button>
+                <div className="space-y-2">
+                  <p className="flex items-center gap-1.5 text-[10px] font-mono" style={{ color: P.dim }}>
+                    <GitFork size={11} style={{ color: P.gold }} />
+                    Forking from <span className="font-semibold" style={{ color: P.gold }}>{forkSourceName}</span>
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      value={forkName}
+                      onChange={(event) => setForkName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') handleFork();
+                        if (event.key === 'Escape') cancelFork();
+                      }}
+                      placeholder="e.g. Data Analyst - Google"
+                      className="min-w-0 flex-1 rounded-lg px-3 py-2 text-xs outline-none"
+                      style={{
+                        color: P.text,
+                        background: P.bg,
+                        border: `1px solid ${P.gold}88`,
+                      }}
+                    />
+                    <button
+                      onClick={handleFork}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg"
+                      style={{ color: P.jade, background: P.bg }}
+                      title="Create version"
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      onClick={cancelFork}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg"
+                      style={{ color: P.crimson, background: P.bg }}
+                      title="Cancel"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <button
-                  onClick={() => setForking(true)}
+                  onClick={() => startFork(null, '')}
                   className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors"
                   style={{
                     color: P.gold,

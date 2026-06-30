@@ -11,9 +11,10 @@ import {
 import { ResumeData, SectionConfig } from '@/lib/types';
 import { ApiError } from '@/lib/api';
 import {
-  planTransform, tailorSection, TransformStep, SectionProposal, SectionAdvice,
+  planTransform, tailorSection, TransformStep, SectionProposal, SectionAdvice, UnitProposal,
 } from '@/lib/resumeTransform';
 import { Spinner } from '@/components/ui/Spinner';
+import ReorderableBullets from '@/components/builder/ReorderableBullets';
 
 interface Props {
   data: ResumeData;
@@ -28,12 +29,14 @@ interface Props {
   onClose: () => void;
 }
 
-type Phase = 'planning' | 'sections' | 'stepping' | 'done' | 'error';
+type Phase = 'planning' | 'sections' | 'entries' | 'stepping' | 'done' | 'error';
 type Draft = { bullets?: string[]; text?: string };
 type StepStatus = 'pending' | 'accepted' | 'skipped';
 type PropState = 'loading' | 'ready' | 'error';
 
 const BULLET_KINDS = new Set<TransformStep['kind']>(['experience', 'projects', 'extracurricular']);
+// Entry kinds the user can DROP for a role (the summary/education are never dropped).
+const DROPPABLE_KINDS = BULLET_KINDS;
 
 // Shallow-deep clone that's safe for our plain-JSON resume data.
 const clone = (d: ResumeData): ResumeData =>
@@ -72,6 +75,8 @@ export default function TransformWizard({
   // Whole-section drop advice + the user's keep/drop choices.
   const [sectionAdvice, setSectionAdvice] = useState<SectionAdvice[]>([]);
   const [keepSections, setKeepSections] = useState<Record<string, boolean>>({});
+  // Per-entry keep/drop choices (entries phase) — keyed by entry_id.
+  const [keepEntries, setKeepEntries] = useState<Record<string, boolean>>({});
 
   // Branch-save sub-state (on the done screen).
   const [naming, setNaming] = useState(false);
@@ -84,8 +89,33 @@ export default function TransformWizard({
     () => new Set(sectionAdvice.filter((a) => keepSections[a.section] === false).map((a) => a.section)),
     [sectionAdvice, keepSections],
   );
-  const activeSteps = useMemo(() => steps.filter((s) => !droppedSet.has(s.section)), [steps, droppedSet]);
+  // Droppable entries that still belong to a KEPT section (drive the entries phase).
+  const droppableSteps = useMemo(
+    () => steps.filter((s) => DROPPABLE_KINDS.has(s.kind) && !droppedSet.has(s.section)),
+    [steps, droppedSet],
+  );
+  const droppedEntryIds = useMemo(
+    () => new Set(droppableSteps.filter((s) => keepEntries[s.entry_id] === false).map((s) => s.entry_id)),
+    [droppableSteps, keepEntries],
+  );
+  const activeSteps = useMemo(
+    () => steps.filter((s) => !droppedSet.has(s.section) && !droppedEntryIds.has(s.entry_id)),
+    [steps, droppedSet, droppedEntryIds],
+  );
   const tailoredConfig = useMemo(() => sectionConfig.filter((s) => !droppedSet.has(s.id)), [sectionConfig, droppedSet]);
+  // The committed résumé minus dropped entries (dropped whole sections are handled
+  // by tailoredConfig, which preserves their underlying data).
+  const finalData = useMemo(() => {
+    if (!droppedEntryIds.size) return working;
+    const d = clone(working);
+    for (const sec of ['experience', 'projects', 'extracurricular'] as const) {
+      const list = (d as unknown as Record<string, { id?: string }[]>)[sec];
+      if (Array.isArray(list)) {
+        (d as unknown as Record<string, unknown>)[sec] = list.filter((e) => !droppedEntryIds.has(String(e.id)));
+      }
+    }
+    return d;
+  }, [working, droppedEntryIds]);
 
   // ── Original-unit lookups (against the untouched `data`, for grounding + diff) ──
   const findEntry = useCallback((section: string, id: string): Record<string, unknown> => {
@@ -103,6 +133,8 @@ export default function TransformWizard({
     step.kind === 'summary'
       ? (data.personal.summary ?? '')
       : String(originalUnit(step).highlight ?? '');
+  // One-line snapshot of an entry's current bullets — shown on the entries (drop) phase.
+  const entryPreview = (step: TransformStep): string => oldBullets(step).slice(0, 2).join(' · ');
 
   // Whole-résumé text — used as the grounding source for the summary step, so a
   // number that legitimately lives elsewhere in the résumé is allowed there.
@@ -147,8 +179,19 @@ export default function TransformWizard({
         setSteps(plan.steps);
         setSectionAdvice(advice);
         setKeepSections(Object.fromEntries(advice.map((a) => [a.section, a.keep] as [string, boolean])));
+        setKeepEntries(Object.fromEntries(
+          plan.steps
+            .filter((s) => DROPPABLE_KINDS.has(s.kind))
+            .map((s) => [s.entry_id, !s.recommend_drop] as [string, boolean]),
+        ));
         setPlanMissing(plan.missing_keywords ?? []);
-        setPhase(advice.length ? 'sections' : (plan.steps.length ? 'stepping' : 'done'));
+        const hasDroppable = plan.steps.some((s) => DROPPABLE_KINDS.has(s.kind));
+        setPhase(
+          advice.length ? 'sections'
+            : hasDroppable ? 'entries'
+              : plan.steps.length ? 'stepping'
+                : 'done',
+        );
       } catch (err) {
         if (cancelled) return;
         setPlanError(errMsg(err));
@@ -178,6 +221,36 @@ export default function TransformWizard({
       setPropState((s) => ({ ...s, [idx]: 'error' }));
     }
   }, [activeSteps, jobDescription, jobTitle, company, originalUnit, sourcesFor, draftFromProposal, instruction]);
+
+  // Surgical regenerate: edit the CURRENT draft per the user's comment (only what
+  // they ask changes) — bullets via keep/edit/add ops, text via a minimal rewrite.
+  // Unlike the initial fetch this sends the LIVE draft, so repeated tweaks build on
+  // it instead of restarting from the original (which caused the identical-output loop).
+  const refineSection = useCallback(async (idx: number) => {
+    const step = activeSteps[idx];
+    const curDraft = drafts[idx];
+    if (!step || !curDraft) return;
+    const current: UnitProposal = BULLET_KINDS.has(step.kind)
+      ? { bullets: (curDraft.bullets ?? []).filter((b) => b.trim()) }
+      : step.kind === 'summary'
+        ? { summary: curDraft.text ?? '' }
+        : { text: curDraft.text ?? '' };
+    setPropState((s) => ({ ...s, [idx]: 'loading' }));
+    setPropError((e) => ({ ...e, [idx]: '' }));
+    try {
+      const res = await tailorSection({
+        jobDescription, jobTitle, company,
+        kind: step.kind, entry: originalUnit(step), current,
+        sources: sourcesFor(step, idx), instruction: (instruction[idx] ?? '').trim(),
+      });
+      setProposals((p) => ({ ...p, [idx]: res }));
+      setDrafts((d) => ({ ...d, [idx]: draftFromProposal(step, res) }));
+      setPropState((s) => ({ ...s, [idx]: 'ready' }));
+    } catch (err) {
+      setPropError((e) => ({ ...e, [idx]: errMsg(err) }));
+      setPropState((s) => ({ ...s, [idx]: 'error' }));
+    }
+  }, [activeSteps, drafts, jobDescription, jobTitle, company, originalUnit, sourcesFor, draftFromProposal, instruction]);
 
   useEffect(() => {
     if (phase !== 'stepping') return;
@@ -219,6 +292,8 @@ export default function TransformWizard({
     if (i < activeSteps.length - 1) setI(i + 1);
     else setPhase('done');
   };
+  // Enter the per-unit stepping flow from a selection phase (reset to the first step).
+  const enterStepping = () => { setI(0); setPhase(activeSteps.length ? 'stepping' : 'done'); };
 
   const accept = () => {
     const step = activeSteps[i];
@@ -236,6 +311,12 @@ export default function TransformWizard({
     advance();
   };
   const regenerate = () => {
+    // With a comment → surgically refine the CURRENT draft (only what's asked
+    // changes). Without one → fetch a fresh tailoring variation from the original.
+    if ((instruction[i] ?? '').trim() && drafts[i]) {
+      refineSection(i);
+      return;
+    }
     setProposals((p) => { const n = { ...p }; delete n[i]; return n; });
     setDrafts((d) => { const n = { ...d }; delete n[i]; return n; });
     fetchProposal(i);
@@ -244,25 +325,17 @@ export default function TransformWizard({
   // ── Draft editing ───────────────────────────────────────────────────────────
   const setDraftText = (val: string) =>
     setDrafts((d) => ({ ...d, [i]: { ...d[i], text: val } }));
-  const setBullet = (k: number, val: string) =>
-    setDrafts((d) => {
-      const b = [...(d[i]?.bullets ?? [])]; b[k] = val;
-      return { ...d, [i]: { ...d[i], bullets: b } };
-    });
+  const setBullets = (bullets: string[]) =>
+    setDrafts((d) => ({ ...d, [i]: { ...d[i], bullets } }));
   const addBullet = () =>
     setDrafts((d) => ({ ...d, [i]: { ...d[i], bullets: [...(d[i]?.bullets ?? []), ''] } }));
-  const removeBullet = (k: number) =>
-    setDrafts((d) => {
-      const b = (d[i]?.bullets ?? []).filter((_, idx) => idx !== k);
-      return { ...d, [i]: { ...d[i], bullets: b } };
-    });
 
   const acceptedCount = Object.values(statuses).filter((s) => s === 'accepted').length;
 
   const confirmBranch = async () => {
     if (!branchName.trim() || savingBranch) return;
     setSavingBranch(true); setBranchError('');
-    const ok = await onSaveBranch(branchName.trim(), working, tailoredConfig);
+    const ok = await onSaveBranch(branchName.trim(), finalData, tailoredConfig);
     setSavingBranch(false);
     if (ok) onClose();
     else setBranchError("Couldn't create the branch — please try again.");
@@ -271,7 +344,8 @@ export default function TransformWizard({
   if (!mounted) return null;
 
   const step = activeSteps[i];
-  const committable = activeSteps.length > 0 || droppedSet.size > 0;
+  const droppedCount = droppedSet.size + droppedEntryIds.size;
+  const committable = activeSteps.length > 0 || droppedCount > 0;
   const isBullets = step ? BULLET_KINDS.has(step.kind) : false;
   const proposal = proposals[i];
   const draft = drafts[i];
@@ -406,6 +480,58 @@ export default function TransformWizard({
             </div>
           )}
 
+          {/* Entries — which individual entries to keep/drop for this JD */}
+          {phase === 'entries' && (
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Layers size={15} className="text-gold" />
+                  <h3 className="font-display font-semibold text-ivory text-base">Which entries fit this role?</h3>
+                </div>
+                <p className="text-ivory/50 text-xs mt-1 leading-relaxed">
+                  Drop entries that don&apos;t support {jobTitle.trim() || 'this role'} — e.g. a project with no relevant
+                  work. Unchecked entries won&apos;t appear in the tailored résumé (your data is always kept); only the
+                  kept ones get rewritten next.
+                </p>
+              </div>
+              {droppableSteps.length === 0 ? (
+                <p className="text-ivory/45 text-xs">No entries to review.</p>
+              ) : (
+                <div className="space-y-2">
+                  {droppableSteps.map((s) => {
+                    const keep = keepEntries[s.entry_id] !== false;
+                    const preview = entryPreview(s);
+                    return (
+                      <label
+                        key={s.entry_id}
+                        className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                          keep ? 'border-ink-700/60 bg-ink-800/30' : 'border-crimson/25 bg-crimson/[0.05]'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={keep}
+                          onChange={(e) => setKeepEntries((k) => ({ ...k, [s.entry_id]: e.target.checked }))}
+                          className="accent-gold mt-0.5"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`text-sm font-medium ${keep ? 'text-ivory' : 'text-ivory-muted line-through'}`}>{s.label}</p>
+                            <span className="text-[9px] font-mono uppercase tracking-wider text-ink-500">{s.kind}</span>
+                          </div>
+                          {s.recommend_drop && s.reason && (
+                            <p className="text-[11px] text-gold/80 mt-0.5">AI suggests dropping — {s.reason}</p>
+                          )}
+                          {preview && <p className="text-[11px] text-ivory/40 mt-0.5 leading-relaxed line-clamp-2">{preview}</p>}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Plan error */}
           {phase === 'error' && (
             <div className="rounded-lg border border-crimson/30 bg-crimson/[0.07] p-4">
@@ -434,6 +560,32 @@ export default function TransformWizard({
                 </div>
                 <h3 className="font-display font-semibold text-ivory text-base mt-0.5">{step.label}</h3>
                 {step.reason && <p className="text-[11px] text-ivory/45 mt-0.5 leading-relaxed">{step.reason}</p>}
+              </div>
+
+              {/* Current content — always visible & numbered, so you can recall it
+                  while writing notes and say "change bullet 2" in the refine box. */}
+              <div className="rounded-xl border border-ink-700/60 bg-ink-900/40 p-3">
+                <p className="text-[10px] uppercase tracking-wide text-ink-500 mb-2">
+                  Current{isBullets ? ' bullets' : ''}
+                </p>
+                {isBullets ? (
+                  oldBullets(step).length ? (
+                    <ol className="space-y-1.5">
+                      {oldBullets(step).map((b, k) => (
+                        <li key={k} className="flex items-start gap-2 text-[11px] text-ivory/55 leading-relaxed">
+                          <span className="text-gold/70 font-mono flex-shrink-0">{k + 1}.</span>
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-[11px] text-ivory-dim italic">No bullets yet</p>
+                  )
+                ) : (
+                  <p className="text-[11px] text-ivory/55 leading-relaxed whitespace-pre-wrap">
+                    {oldText(step) || <span className="italic text-ivory-dim">empty</span>}
+                  </p>
+                )}
               </div>
 
               {/* Grounding source: projects -> README, experience -> related work.
@@ -512,43 +664,29 @@ export default function TransformWizard({
                     </div>
                   )}
 
-                  {/* Old → New */}
-                  <div className="grid md:grid-cols-2 gap-3">
-                    {/* Current */}
-                    <div className="rounded-xl border border-ink-700/60 bg-ink-900/40 p-3">
-                      <p className="text-[10px] uppercase tracking-wide text-ink-500 mb-2">Current</p>
-                      {isBullets ? (
-                        <ul className="space-y-1.5">
-                          {oldBullets(step).map((b, k) => (
-                            <li key={k} className="flex items-start gap-1.5 text-[11px] text-ivory/50 leading-relaxed">
-                              <span className="text-ink-500 mt-0.5">•</span><span>{b}</span>
-                            </li>
-                          ))}
-                          {oldBullets(step).length === 0 && <p className="text-[11px] text-ivory-dim italic">empty</p>}
-                        </ul>
-                      ) : (
-                        <p className="text-[11px] text-ivory/50 leading-relaxed whitespace-pre-wrap">{oldText(step) || <span className="italic text-ivory-dim">empty</span>}</p>
-                      )}
-                    </div>
-
-                    {/* Tailored (editable) */}
-                    <div className="rounded-xl border border-gold/25 bg-gold/[0.04] p-3">
-                      <p className="text-[10px] uppercase tracking-wide text-gold/70 mb-2 flex items-center gap-1">
-                        <Sparkles size={10} /> Tailored — edit freely
-                      </p>
-                      {isBullets ? (
-                        <div className="space-y-1.5">
-                          {(draft.bullets ?? []).map((b, k) => (
-                            <div key={k} className="flex items-start gap-1.5">
+                  {/* Tailored (editable) — full width; compare against the numbered Current above */}
+                  <div className="rounded-xl border border-gold/25 bg-gold/[0.04] p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gold/70 mb-2 flex items-center gap-1">
+                      <Sparkles size={10} /> Tailored — edit freely
+                    </p>
+                    {isBullets ? (
+                      <div className="space-y-1.5">
+                        <ReorderableBullets
+                          bullets={draft.bullets ?? []}
+                          onChange={setBullets}
+                          className="space-y-1.5"
+                          renderBullet={({ value, setValue, remove, canRemove, dragHandle }) => (
+                            <div className="flex items-start gap-1.5">
+                              {dragHandle}
                               <textarea
-                                value={b}
-                                onChange={(e) => setBullet(k, e.target.value)}
+                                value={value}
+                                onChange={(e) => setValue(e.target.value)}
                                 rows={2}
                                 className="input-base flex-1 !text-[11px] !leading-relaxed resize-y min-h-[44px] !py-1.5 !px-2"
                               />
-                              {(draft.bullets ?? []).length > 1 && (
+                              {canRemove && (
                                 <button
-                                  onClick={() => removeBullet(k)}
+                                  onClick={remove}
                                   className="mt-1.5 text-ivory-dim hover:text-crimson transition-colors flex-shrink-0 cursor-pointer"
                                   title="Remove bullet"
                                 >
@@ -556,23 +694,23 @@ export default function TransformWizard({
                                 </button>
                               )}
                             </div>
-                          ))}
-                          <button
-                            onClick={addBullet}
-                            className="flex items-center gap-1 text-[10px] text-gold hover:text-gold-light transition-colors cursor-pointer"
-                          >
-                            <Plus size={11} /> Add bullet
-                          </button>
-                        </div>
-                      ) : (
-                        <textarea
-                          value={draft.text ?? ''}
-                          onChange={(e) => setDraftText(e.target.value)}
-                          rows={5}
-                          className="input-base w-full !text-[11px] !leading-relaxed resize-y min-h-[100px]"
+                          )}
                         />
-                      )}
-                    </div>
+                        <button
+                          onClick={addBullet}
+                          className="flex items-center gap-1 text-[10px] text-gold hover:text-gold-light transition-colors cursor-pointer"
+                        >
+                          <Plus size={11} /> Add bullet
+                        </button>
+                      </div>
+                    ) : (
+                      <textarea
+                        value={draft.text ?? ''}
+                        onChange={(e) => setDraftText(e.target.value)}
+                        rows={5}
+                        className="input-base w-full !text-[11px] !leading-relaxed resize-y min-h-[100px]"
+                      />
+                    )}
                   </div>
 
                   {/* Rationale + keyword chips */}
@@ -614,7 +752,7 @@ export default function TransformWizard({
                         onChange={(e) => setInstruction((s) => ({ ...s, [i]: e.target.value }))}
                         onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !showSpinner) regenerate(); }}
                         rows={2}
-                        placeholder="e.g. make it shorter · emphasize leadership · use more metrics · focus on backend"
+                        placeholder="e.g. shorten bullet 2 · keep 1 & 3, rewrite the rest · add a bullet on Docker · emphasize leadership"
                         className="input-base flex-1 !text-[11px] !leading-relaxed resize-y min-h-[40px]"
                       />
                       <button
@@ -627,7 +765,8 @@ export default function TransformWizard({
                       </button>
                     </div>
                     <p className="text-[10px] text-ivory/35 mt-1 leading-relaxed">
-                      Your note guides the rewrite — facts and numbers are still never invented. (⌘/Ctrl+Enter)
+                      Only what you ask changes — the rest stays as-is. Reference bullets by number (the list above).
+                      Facts and numbers are never invented. (⌘/Ctrl+Enter)
                     </p>
                   </div>
                 </>
@@ -645,7 +784,7 @@ export default function TransformWizard({
                 <h3 className="font-display font-semibold text-ivory text-base">
                   {!committable
                     ? 'Nothing to tailor'
-                    : `${acceptedCount} section${acceptedCount === 1 ? '' : 's'} tailored${droppedSet.size ? ` · ${droppedSet.size} dropped` : ''}`}
+                    : `${acceptedCount} section${acceptedCount === 1 ? '' : 's'} tailored${droppedCount ? ` · ${droppedCount} dropped` : ''}`}
                 </h3>
                 <p className="text-ivory/50 text-xs mt-1">
                   {!committable
@@ -683,11 +822,37 @@ export default function TransformWizard({
               {droppedSet.size > 0 ? `${droppedSet.size} section${droppedSet.size === 1 ? '' : 's'} will be dropped` : 'All sections kept'}
             </p>
             <button
-              onClick={() => setPhase(activeSteps.length ? 'stepping' : 'done')}
+              onClick={() => (droppableSteps.length ? setPhase('entries') : enterStepping())}
               className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg bg-gold text-ink-950 font-semibold hover:bg-gold-light transition-colors cursor-pointer shadow-sm shadow-gold/25"
             >
               Continue <ArrowRight size={13} />
             </button>
+          </div>
+        )}
+
+        {phase === 'entries' && (
+          <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-t border-ink-700/60 flex-shrink-0">
+            {sectionAdvice.length > 0 ? (
+              <button
+                onClick={() => setPhase('sections')}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg border border-ink-600/80 text-ivory-muted hover:text-ivory transition-colors cursor-pointer"
+              >
+                <ArrowLeft size={13} /> Back
+              </button>
+            ) : <span />}
+            <div className="flex items-center gap-3">
+              <p className="text-[11px] text-ivory-dim">
+                {droppedEntryIds.size > 0
+                  ? `${droppedEntryIds.size} entr${droppedEntryIds.size === 1 ? 'y' : 'ies'} will be dropped`
+                  : 'All entries kept'}
+              </p>
+              <button
+                onClick={enterStepping}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs rounded-lg bg-gold text-ink-950 font-semibold hover:bg-gold-light transition-colors cursor-pointer shadow-sm shadow-gold/25"
+              >
+                Continue <ArrowRight size={13} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -761,7 +926,7 @@ export default function TransformWizard({
                 {committable && (
                   <>
                     <button
-                      onClick={() => { onApply(working, tailoredConfig); onClose(); }}
+                      onClick={() => { onApply(finalData, tailoredConfig); onClose(); }}
                       className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg border border-ink-600/80 text-ivory-muted hover:text-ivory hover:bg-ink-800/50 transition-colors cursor-pointer"
                     >
                       <PencilLine size={13} /> Apply here (unsaved)

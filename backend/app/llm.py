@@ -103,7 +103,6 @@ def chat_json(
         {},
     ]
 
-    content = ""
     truncated = False
     last_error: Exception | None = None
     for opts in attempts:
@@ -122,20 +121,27 @@ def chat_json(
         choice = resp.choices[0] if resp.choices else None
         content = (getattr(choice.message, "content", None) or "") if choice else ""
         finish = getattr(choice, "finish_reason", None) if choice else None
-        if content.strip() and finish == "length":
+        if not content.strip():
+            continue
+        if finish == "length":
             # Output ran into the token ceiling — the JSON is incomplete. Drop it
             # and let a later attempt (the last has no max_tokens) finish cleanly.
             truncated = True
-            content = ""
             continue
-        if content.strip():
+        # Non-empty and complete — but it must still PARSE. If the model returned
+        # prose, or JSON with unescaped quotes, advance to the next attempt
+        # (e.g. JSON mode) instead of failing outright on this one.
+        try:
+            return _extract_json(content)
+        except LLMError as exc:
+            last_error = exc
             truncated = False
-            break
+            continue
 
-    if not content.strip():
-        if truncated:
-            raise LLMError("The AI response was cut off because it was too long. Please try again.")
-        if last_error is not None:
-            raise LLMError(f"LLM request failed: {last_error}") from last_error
-        raise LLMError("LLM returned an empty response.")
-    return _extract_json(content)
+    if truncated:
+        raise LLMError("The AI response was cut off because it was too long. Please try again.")
+    if isinstance(last_error, LLMError):
+        raise last_error
+    if last_error is not None:
+        raise LLMError(f"LLM request failed: {last_error}") from last_error
+    raise LLMError("LLM returned an empty response.")

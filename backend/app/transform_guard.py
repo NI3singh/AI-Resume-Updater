@@ -252,6 +252,50 @@ def guard_unit(
     return out, warnings
 
 
+def resolve_bullet_ops(raw: Any, current: list[str]) -> list[str]:
+    """Resolve a refine model's edit ops into the final ordered bullet list.
+
+    Each op is one of:
+      ``{"op": "keep",  "index": N}``               -> ``current[N]`` VERBATIM
+      ``{"op": "edit",  "index": N, "text": "…"}``  -> the new text (or current[N] if blank)
+      ``{"op": "add",   "text": "…"}``              -> the new text
+    A ``keep`` resolves to the original bullet so untouched bullets cannot drift
+    (this is what makes "change only bullet 2" surgical). Plain strings are also
+    accepted (treated as final bullets) so a model that ignores the op format
+    still yields a usable result. Used by both the GitHub project crafter and the
+    interactive Transform refine.
+    """
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw:
+        if isinstance(item, str):
+            text = item.strip()
+            if text:
+                out.append(text)
+            continue
+        if not isinstance(item, dict):
+            continue
+        op = str(item.get("op") or "").strip().lower()
+        idx = item.get("index")
+        idx = idx if isinstance(idx, int) else None
+        text = str(item.get("text") or "").strip()
+        if op == "keep":
+            if idx is not None and 0 <= idx < len(current):
+                out.append(current[idx])
+        elif op in ("edit", "replace", "rewrite", "update"):
+            if text:
+                out.append(text)
+            elif idx is not None and 0 <= idx < len(current):
+                out.append(current[idx])
+        elif op in ("add", "new", "insert", "append"):
+            if text:
+                out.append(text)
+        elif text:  # unknown/absent op but carries text — keep it
+            out.append(text)
+    return out
+
+
 def enforce_no_fabrication(
     original: dict[str, Any], transformed: Any,
 ) -> tuple[dict[str, Any], list[str], list[str]]:

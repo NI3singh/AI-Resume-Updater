@@ -34,7 +34,7 @@ from ..schemas import (
     GithubTreeIn,
     GithubTreeOut,
 )
-from ..transform_guard import guard_unit
+from ..transform_guard import guard_unit, resolve_bullet_ops
 
 router = APIRouter(prefix="/github", tags=["github"])
 
@@ -81,12 +81,20 @@ _SRC_DIRS = {"src", "app", "lib", "backend", "frontend", "server", "api", "cmd",
 GITHUB_PROJECT_SYSTEM = (
     "You are an elite résumé writer for top tech companies. From a GitHub "
     "project's metadata, README, package manifests, and selected SOURCE CODE, "
-    "write 3-5 strong, truthful résumé bullet points capturing what was built "
-    "and the engineering depth.\n\n"
-    "STRICT RULES:\n"
+    "write a SMALL set of strong, truthful, information-dense résumé bullets that "
+    "capture what was built and the engineering depth.\n\n"
+    "LENGTH & COUNT:\n"
+    "- Write 3-4 bullets for a typical project. Add a 5th or 6th ONLY when the "
+    "project is genuinely large with distinct workstreams that 4 bullets cannot "
+    "cover. Fewer, richer bullets beat many thin ones — MERGE related points "
+    "instead of splitting them.\n"
+    "- Each bullet is a complete, substantial sentence (about one to two lines, "
+    "~18-34 words): WHAT was built + the KEY technologies & architecture + the "
+    "depth, scope, or impact. No short fragments, no filler padding.\n\n"
+    "STRICT GROUNDING:\n"
     "- Ground EVERYTHING in the provided sources (metadata, README, manifests, "
     "code) and any USER NOTES. NEVER invent metrics, users, performance numbers, "
-    "outcomes, or features they don't evidence.\n"
+    "outcomes, integrations, or features they don't evidence.\n"
     "- Name the REAL technologies, frameworks, architecture, and techniques "
     "visible in the code/manifests — e.g. 'JWT auth', 'PostgreSQL + Alembic "
     "migrations', 'React + Zustand', 'FastAPI', 'Dockerized', 'CI via GitHub "
@@ -103,6 +111,56 @@ GITHUB_PROJECT_SYSTEM = (
     'Return ONLY a JSON object: { "bullets": ["..."], '
     '"techStack": "comma-separated real technologies", '
     '"rationale": "one short sentence" }  No markdown, no commentary.'
+)
+
+# Agentic editor for the refine/regenerate step: returns edit OPERATIONS over the
+# current bullets so the user's request is applied surgically — bullets they want
+# untouched are preserved verbatim (server resolves "keep" from the originals).
+GITHUB_REFINE_SYSTEM = (
+    "You are an agentic résumé-bullet editor. You receive the CURRENT BULLETS "
+    "(numbered from 0), the project SOURCES (metadata, README, code), optional "
+    "USER NOTES, and a USER REQUEST. Apply the USER REQUEST PRECISELY by emitting "
+    "a list of edit operations that produce the FINAL bullets, in final order.\n\n"
+    "OPERATIONS — each element of \"bullets\" is one of:\n"
+    '  {"op":"keep","index":N}              keep current bullet N EXACTLY as-is\n'
+    '  {"op":"edit","index":N,"text":"..."} replace current bullet N with new text\n'
+    '  {"op":"add","text":"..."}            add a brand-new bullet\n\n'
+    "RULES:\n"
+    "- The final bullets are EXACTLY the ops you emit, in order. Any current "
+    "bullet you do not 'keep' or 'edit' is DROPPED — to delete one, simply omit "
+    "it.\n"
+    "- Change ONLY what the request asks. If the user says to keep some bullets "
+    "and add another, emit 'keep' for each of those (do NOT reword them) and "
+    "'add' for the new one. NEVER silently rewrite a bullet the user wanted left "
+    "alone.\n"
+    "- Honor explicit counts EXACTLY: 'make it 3 bullets' -> exactly 3 ops; "
+    "'keep only 2' -> exactly 2 ops; 'add a bullet' -> the existing ops plus one "
+    "more.\n"
+    "- New or edited text MUST be grounded in the SOURCES or USER NOTES — name "
+    "real tech/architecture; NEVER invent metrics, features, scale, or outcomes. "
+    "If no real metric exists, describe scope and depth instead. Keep each bullet "
+    "a substantial one-to-two-line sentence.\n"
+    "- Strong action verb; specific and technical; no fluff; don't restate the "
+    "project name or URLs.\n\n"
+    'Return ONLY JSON: { "bullets": [ <ops> ], "rationale": "one short sentence" }'
+    "  No markdown, no commentary."
+)
+
+# Second-pass fact checker (multi-call grounding) — flags bullets whose concrete
+# claims are not supported by the sources, so they can be dropped before review.
+GITHUB_VERIFY_SYSTEM = (
+    "You are a strict fact-checker for résumé bullets. You receive the project "
+    "SOURCES (metadata, README, code) and DRAFT BULLETS numbered from 0. For each "
+    "bullet decide whether EVERY concrete claim it makes — technologies, "
+    "features, architecture, integrations, scale, metrics, outcomes — is "
+    "supported by the sources.\n"
+    "- Mark ok=false ONLY when a bullet asserts something the sources do not show "
+    "(an invented feature, integration, technology, user/scale number, or "
+    "metric). Be LENIENT about reasonable wording of what the code clearly does; "
+    "do not punish style or generic phrasing.\n"
+    "- When ok=false, name the unsupported claim in 'issue' (a few words).\n"
+    'Return ONLY JSON: { "verdicts": [ {"index":0,"ok":true,"issue":""}, ... ] } '
+    "— exactly one verdict per bullet, in order."
 )
 
 
@@ -306,6 +364,49 @@ def _readme_blurb(readme: str, limit: int = 180) -> str:
     return blurb
 
 
+def _verify_bullets(bullets: list[str], digest: str, notes: str) -> tuple[list[str], list[str]]:
+    """Drop draft bullets asserting a concrete claim the sources don't support.
+
+    A conservative, fail-open second LLM pass that lowers hallucinations on top of
+    the deterministic number guard. On any error, an unusable response, or a
+    verdict that would remove EVERY bullet (likely overzealous), the bullets are
+    returned unchanged. Returns ``(kept_bullets, warnings)``.
+    """
+    clean = [b for b in bullets if isinstance(b, str) and b.strip()]
+    if not clean:
+        return bullets, []
+    numbered = "\n".join(f"[{i}] {b}" for i, b in enumerate(clean))
+    msg = (
+        "=== SOURCES (metadata, README, code) ===\n" + digest
+        + (f"\n\n=== USER NOTES (allowed facts) ===\n{notes}" if notes else "")
+        + "\n\n=== DRAFT BULLETS ===\n" + numbered
+    )
+    try:
+        res = chat_json(GITHUB_VERIFY_SYSTEM, msg, max_tokens=1024, temperature=0.0)
+    except (LLMError, LLMNotConfigured):
+        return clean, []
+    verdicts = res.get("verdicts") if isinstance(res, dict) else None
+    if not isinstance(verdicts, list):
+        return clean, []
+    flagged: dict[int, str] = {}
+    for v in verdicts:
+        if isinstance(v, dict) and v.get("ok") is False:
+            idx = v.get("index")
+            if isinstance(idx, int) and 0 <= idx < len(clean):
+                flagged[idx] = str(v.get("issue") or "").strip()
+    if not flagged:
+        return clean, []
+    kept = [b for i, b in enumerate(clean) if i not in flagged]
+    if not kept:  # verifier rejected everything — treat as overzealous, keep all
+        return clean, []
+    warnings: list[str] = []
+    for i, issue in flagged.items():
+        snippet = clean[i][:60] + ("…" if len(clean[i]) > 60 else "")
+        detail = issue or "claim not found in the code/README"
+        warnings.append(f"Removed an unverified bullet — {detail}: {snippet}")
+    return kept, warnings
+
+
 # ── Routes ───────────────────────────────────────────────────────────────────
 @router.post("/repos", response_model=GithubReposOut)
 def github_repos(
@@ -320,7 +421,7 @@ def github_repos(
         with httpx.Client(timeout=20.0, headers=_gh_headers()) as client:
             for page in (1, 2):  # up to 200 repos
                 resp = client.get(
-                    f"{settings.github_api_url}/users/{username}/repos",
+                    f"{settings.github_api_url}/users/{quote(username, safe='')}/repos",
                     params={"per_page": 100, "sort": "updated", "type": "owner", "page": page},
                 )
                 _raise_for_gh_status(resp.status_code, not_found="GitHub user not found.")
@@ -459,13 +560,16 @@ def github_project(
     tech = tech_meta
     rationale = ""
     try:
-        result = chat_json(GITHUB_PROJECT_SYSTEM, user_msg, max_tokens=2048, temperature=0.4)
+        result = chat_json(GITHUB_PROJECT_SYSTEM, user_msg, max_tokens=2048, temperature=0.3)
         guarded, warnings = guard_unit(
             "projects", draft_entry, {"bullets": result.get("bullets")}, sources=sources,
         )
         bullets = guarded.get("bullets", [])
         tech = str(result.get("techStack") or "").strip() or tech_meta
         rationale = str(result.get("rationale") or "").strip()
+        # Second grounding pass: fact-check the bullets, dropping unsupported claims.
+        bullets, verify_warnings = _verify_bullets(bullets, digest, notes)
+        warnings += verify_warnings
     except LLMNotConfigured:
         bullets = [description] if description else []
         warnings = ["AI is not configured — added the repo description as a starter bullet."]
@@ -505,28 +609,43 @@ def github_project_refine(
     notes = payload.notes.strip()[: settings.parse_text_limit]
     current = [b for b in payload.current_bullets if isinstance(b, str) and b.strip()]
 
-    header = "Refine the résumé bullets for this GitHub project using ONLY the sources below.\n"
+    header = (
+        "Edit the résumé bullets for this GitHub project by applying the user "
+        "request below. Use ONLY the sources for any new facts, and emit edit "
+        "operations (keep / edit / add) over the current bullets.\n"
+    )
     if instruction:
-        header += f"\n*** USER REQUEST (apply this; never invent facts): {instruction}\n"
+        header += f"\n*** USER REQUEST (apply EXACTLY; never invent facts): {instruction}\n"
     user_msg = header
     if current:
-        user_msg += "\nCURRENT BULLETS:\n" + "\n".join(f"- {b}" for b in current) + "\n"
+        user_msg += (
+            "\nCURRENT BULLETS (reference these by index in your ops):\n"
+            + "\n".join(f"[{i}] {b}" for i, b in enumerate(current))
+            + "\n"
+        )
+    else:
+        user_msg += "\n(There are no current bullets yet — use 'add' ops.)\n"
     user_msg += "\n=== SOURCES (metadata, README, code) ===\n" + digest
     if notes:
         user_msg += f"\n\n=== USER NOTES (facts the user provided — allowed) ===\n{notes}"
     if instruction:
-        user_msg += f"\n\nREMINDER — apply the user request above: {instruction}"
+        user_msg += (
+            "\n\nREMINDER — apply the user request EXACTLY: change only what it asks "
+            "and preserve every other bullet with a 'keep' op. Request: "
+            f"{instruction}"
+        )
 
     sources = [digest] + ([notes] if notes else []) + ([instruction] if instruction else [])
     try:
-        result = chat_json(GITHUB_PROJECT_SYSTEM, user_msg, max_tokens=2048, temperature=0.5)
+        result = chat_json(GITHUB_REFINE_SYSTEM, user_msg, max_tokens=2048, temperature=0.3)
     except LLMNotConfigured as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except LLMError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
+    proposed = resolve_bullet_ops(result.get("bullets"), current)
     guarded, warnings = guard_unit(
-        "projects", {"bullets": current}, {"bullets": result.get("bullets")}, sources=sources,
+        "projects", {"bullets": current}, {"bullets": proposed}, sources=sources,
     )
     return GithubRefineOut(
         bullets=guarded.get("bullets", []),

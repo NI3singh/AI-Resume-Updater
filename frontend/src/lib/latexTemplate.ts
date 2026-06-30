@@ -15,21 +15,34 @@ import {
 
 // ---------------------------------------------------------------------------
 // Escape plain text for LaTeX (low-level — only used inside tex() below).
+//
+// Single-pass replacement via a lookup map: each special character maps to its
+// LaTeX-safe form and is substituted exactly once, so the backslashes/braces we
+// introduce are never re-scanned (a chained .replace() would, e.g., turn a typed
+// "\" into \textbackslash{} and then escape ITS braces — corrupting it).
+//   & % $ # _ { }      -> backslash-escaped
+//   \ ~ ^ < > |        -> text commands (\textbackslash{}, \textless{}, …)
+// <, >, | matter because in LaTeX's default OT1 text encoding the raw glyphs
+// render as ¡ ¿ — (this is why a typed "<" came out looking like "!").
 // ---------------------------------------------------------------------------
-const esc = (str: string): string => {
-  if (!str) return '';
-  return str
-    .replace(/\\/g, '\\textbackslash{}')
-    .replace(/&/g,  '\\&')
-    .replace(/%/g,  '\\%')
-    .replace(/\$/g, '\\$')
-    .replace(/#/g,  '\\#')
-    .replace(/_/g,  '\\_')
-    .replace(/\{/g, '\\{')
-    .replace(/\}/g, '\\}')
-    .replace(/~/g,  '\\textasciitilde{}')
-    .replace(/\^/g, '\\textasciicircum{}');
+const LATEX_ESCAPES: Record<string, string> = {
+  '\\': '\\textbackslash{}',
+  '&': '\\&',
+  '%': '\\%',
+  '$': '\\$',
+  '#': '\\#',
+  '_': '\\_',
+  '{': '\\{',
+  '}': '\\}',
+  '~': '\\textasciitilde{}',
+  '^': '\\textasciicircum{}',
+  '<': '\\textless{}',
+  '>': '\\textgreater{}',
+  '|': '\\textbar{}',
 };
+
+const esc = (str: string): string =>
+  str ? str.replace(/[\\&%$#_{}~^<>|]/g, (ch) => LATEX_ESCAPES[ch]) : '';
 
 // ---------------------------------------------------------------------------
 // Render ANY user-entered text: LaTeX-escape everything, but turn **bold**

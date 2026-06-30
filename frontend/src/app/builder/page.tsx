@@ -9,16 +9,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Download, FileCode, Eye,
   Zap, Copy, Check, Save, LogOut, CloudOff, Cloud,
-  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine, Target, UserCircle,
+  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine, Target, UserCircle, ScanLine, FileSignature,
 } from 'lucide-react';
 import { ResumeData, SectionConfig, ActiveSection, ALL_SECTIONS } from '@/lib/types';
 import { generateLatex } from '@/lib/latexTemplate';
 import { compileToPDF, downloadBlob, downloadLatex, resumeFileBase } from '@/lib/pdfCompiler';
+import { scanResume, applyFix, applyAll, FieldFix } from '@/lib/proofread';
 import FormPanel from '@/components/builder/FormPanel';
+import ScanOverlay from '@/components/builder/ScanOverlay';
+import ScanResults from '@/components/builder/ScanResults';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import ResumeSwitcher from '@/components/builder/ResumeSwitcher';
 import UploadPanel from '@/components/builder/UploadPanel';
 import TransformPanel from '@/components/builder/TransformPanel';
+import CoverLetterPanel from '@/components/builder/CoverLetterPanel';
 import { LogoMark } from '@/components/ui/Logo';
 import { Spinner, PageLoader } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
@@ -43,15 +47,15 @@ function BuilderContent() {
   const { user, loading: authLoading, signOut } = useAuth();
   const {
     resumes, activeResume, loading: resumesLoading, saveStatus,
-    save, rename, forkFromMaster, restoreToMaster, deleteResume, switchTo,
+    save, rename, forkResume, restoreToMaster, deleteResume, switchTo,
   } = useResumes();
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
-  }, [user, authLoading]);
+  }, [user, authLoading, router]);
 
   const [activeSection, setActiveSection] = useState<ActiveSection>('personal');
-  const [builderMode, setBuilderMode]   = useState<'manual' | 'upload' | 'transform'>('manual');
+  const [builderMode, setBuilderMode]   = useState<'manual' | 'upload' | 'transform' | 'coverletter'>('manual');
   const [latexCode, setLatexCode]       = useState('');
   const [previewTab, setPreviewTab]     = useState<PreviewTab>('preview');
   const [isCompiling, setIsCompiling]   = useState(false);
@@ -61,6 +65,17 @@ function BuilderContent() {
 
   const [resumeData, setResumeData]       = useState<ResumeData | null>(null);
   const [sectionConfig, setSectionConfig] = useState<SectionConfig[]>(ALL_SECTIONS);
+
+  // Latest resumeData (so scan-fix applies always build on the freshest content).
+  const resumeDataRef = useRef<ResumeData | null>(resumeData);
+  useEffect(() => { resumeDataRef.current = resumeData; }, [resumeData]);
+
+  // ── Resume scan (proofread) ─────────────────────────────────────────────────
+  const [scanOpen, setScanOpen]     = useState(false);
+  const [scanning, setScanning]     = useState(false);
+  const [scanFixes, setScanFixes]   = useState<FieldFix[]>([]);
+  const [scanAiOk, setScanAiOk]     = useState(true);
+  const [scanError, setScanError]   = useState('');
 
   // ── Resizable form panel (drag the divider on its right edge) ───────────────
   const [formWidth, setFormWidth]   = useState(DEFAULT_FORM_W);
@@ -178,6 +193,10 @@ function BuilderContent() {
     if (pdfUrl) { URL.revokeObjectURL(pdfUrl); setPdfUrl(''); }
   }, [resumeData, sectionConfig]);
 
+  // Revoke the previous PDF blob URL when it's replaced or on unmount — without
+  // this, recompiling (or leaving the page) leaks object URLs.
+  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
+
   // ── Keyboard shortcut Ctrl/Cmd+Z ────────────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -292,6 +311,66 @@ function BuilderContent() {
     }
   };
 
+  // ── Resume scan: commit a fixed copy + recompile so the PDF updates ─────────
+  const commitScanData = useCallback(async (newData: ResumeData) => {
+    setResumeData(newData);
+    pushHistory({ resumeData: newData, sectionConfig });
+    setHasUnsaved(true);
+    setIsCompiling(true); setCompileError('');
+    try {
+      const blob = await compileToPDF(generateLatex(newData, sectionConfig));
+      setPdfUrl(URL.createObjectURL(blob));
+      setPreviewTab('preview');
+    } catch (err) {
+      setCompileError(err instanceof Error ? err.message : 'Compilation failed');
+    } finally {
+      setIsCompiling(false);
+    }
+  }, [sectionConfig, pushHistory]);
+
+  const runScan = useCallback(async () => {
+    if (!resumeData || scanning) return;
+    // Keep any prior pop-up closed; only the green sweep shows while scanning.
+    setScanOpen(false); setScanning(true); setScanError(''); setScanFixes([]); setScanAiOk(true);
+    setPreviewTab('preview');
+    // Make sure a PDF is visible to sweep the scan line over (cosmetic).
+    if (!pdfUrl && latexCode) {
+      try {
+        const blob = await compileToPDF(latexCode);
+        setPdfUrl(URL.createObjectURL(blob));
+      } catch { /* the scan still runs on the résumé data */ }
+    }
+    const started = Date.now();
+    try {
+      const { fixes, aiOk } = await scanResume(resumeData);
+      const elapsed = Date.now() - started;       // keep the animation on screen briefly
+      if (elapsed < 1600) await new Promise((r) => setTimeout(r, 1600 - elapsed));
+      setScanFixes(fixes);
+      setScanAiOk(aiOk);
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Could not scan the résumé. Please try again.');
+    } finally {
+      setScanning(false);
+      setScanOpen(true);   // reveal the results pop-up now that the scan is done
+    }
+  }, [resumeData, scanning, pdfUrl, latexCode]);
+
+  const applyScanFix = useCallback(async (fix: FieldFix) => {
+    setScanFixes((prev) => prev.filter((f) => f.locId !== fix.locId));
+    const latest = resumeDataRef.current;
+    if (!latest) return;
+    const { data, applied } = applyFix(latest, fix);
+    if (applied) await commitScanData(data);
+  }, [commitScanData]);
+
+  const applyAllScanFixes = useCallback(async () => {
+    const latest = resumeDataRef.current;
+    if (!latest || !scanFixes.length) return;
+    const { data, applied } = applyAll(latest, scanFixes);
+    setScanFixes([]);
+    if (applied) await commitScanData(data);
+  }, [scanFixes, commitScanData]);
+
   // ── Save tailored data as a new resume branch (Transform mode) ──────────────
   // Forks with explicit content; the new branch becomes active and the existing
   // activeResume effect loads it with a clean undo/saved baseline.
@@ -311,7 +390,7 @@ function BuilderContent() {
       });
       if (!proceed) return false;
     }
-    const created = await forkFromMaster(name, merged, branchConfig);
+    const created = await forkResume(name, { resumeData: merged, sectionConfig: branchConfig });
     if (!created) return false;
     setBuilderMode('manual');
     setActiveSection('personal');
@@ -435,7 +514,7 @@ function BuilderContent() {
               resumes={resumes}
               activeResume={activeResume}
               onSwitch={switchTo}
-              onFork={async (name) => { await forkFromMaster(name); }}
+              onFork={async (name, sourceId) => { await forkResume(name, { sourceId: sourceId ?? undefined }); }}
               onDelete={deleteResume}
               onRename={rename}
               onRestoreToMaster={(id) => restoreToMaster(id)}
@@ -475,6 +554,16 @@ function BuilderContent() {
             >
               <Target size={12} />
               <span className="hidden lg:inline">Transform</span>
+            </button>
+            <button
+              onClick={() => setBuilderMode('coverletter')}
+              title="Generate a tailored cover letter from a job description"
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-all duration-200 cursor-pointer ${
+                builderMode === 'coverletter' ? 'bg-gold/15 text-gold shadow-sm' : 'text-ivory-muted hover:text-ivory'
+              }`}
+            >
+              <FileSignature size={12} />
+              <span className="hidden lg:inline">Cover Letter</span>
             </button>
           </div>
 
@@ -596,13 +685,18 @@ function BuilderContent() {
             />
           ) : builderMode === 'upload' ? (
             <UploadPanel onImport={handleImport} />
-          ) : (
+          ) : builderMode === 'transform' ? (
             <TransformPanel
               data={resumeData}
               sectionConfig={sectionConfig}
               hasContent={hasContent}
               onApply={handleImport}
               onSaveBranch={handleSaveBranch}
+            />
+          ) : (
+            <CoverLetterPanel
+              data={resumeData}
+              hasContent={hasContent}
             />
           )}
         </div>
@@ -648,6 +742,15 @@ function BuilderContent() {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Scan résumé for spelling / grammar / symbol errors */}
+              <button
+                onClick={runScan}
+                disabled={scanning || !hasContent}
+                title="Scan the résumé for spelling, grammar & symbol errors"
+                className="flex items-center gap-1 text-xs text-ivory-dim hover:text-[#34d399] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ScanLine size={13} /> {scanning ? 'Scanning…' : 'Scan'}
+              </button>
               {compileError && (
                 <span className="text-[10px] text-crimson font-mono bg-crimson/10 border border-crimson/20 px-2 py-1 rounded-md truncate max-w-xs">
                   {compileError}
@@ -715,7 +818,7 @@ function BuilderContent() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex-1 overflow-hidden flex items-center justify-center bg-ink-900/40"
+                className="relative flex-1 overflow-hidden flex items-center justify-center bg-ink-900/40"
               >
                 {pdfUrl ? (
                   <iframe src={`${pdfUrl}#toolbar=0`} className="w-full h-full border-0" title="PDF Preview" />
@@ -736,6 +839,7 @@ function BuilderContent() {
                     </button>
                   </div>
                 )}
+                {scanning && <ScanOverlay />}
               </motion.div>
             )}
           </AnimatePresence>
@@ -793,6 +897,21 @@ function BuilderContent() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Résumé scan drawer ──────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {scanOpen && (
+          <ScanResults
+            fixes={scanFixes}
+            aiOk={scanAiOk}
+            error={scanError}
+            onApply={applyScanFix}
+            onApplyAll={applyAllScanFixes}
+            onRescan={runScan}
+            onClose={() => setScanOpen(false)}
+          />
         )}
       </AnimatePresence>
     </div>

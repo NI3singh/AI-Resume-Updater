@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     github_api_url: str = "https://api.github.com"
     github_token: str = os.getenv("GITHUB_TOKEN", "")
 
+    # Optional path to LibreOffice (`soffice`) used to convert the generated cover
+    # letter DOCX -> PDF. Blank -> auto-detect on PATH / common install dirs; if
+    # none is found the PDF export returns 503 and the DOCX download still works.
+    soffice_path: str = os.getenv("SOFFICE_PATH", "")
+
     # Resume upload limits.
     upload_max_bytes: int = 5 * 1024 * 1024  # 5 MB max upload
     parse_text_limit: int = 16000            # chars of extracted text sent to the LLM

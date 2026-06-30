@@ -53,8 +53,11 @@ class RenameIn(BaseModel):
 
 class ForkIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    # Optional: fork from this owned resume instead of the master. Any version
+    # (master or branch) can be forked; falls back to the master when omitted.
+    source_id: uuid.UUID | None = None
     # Optional content overrides: when provided, the new branch is created with
-    # this data instead of a copy of the master (used by the Transform feature).
+    # this data instead of a copy of the source (used by the Transform feature).
     resume_data: dict[str, Any] | None = None
     section_config: list[Any] | None = None
 
@@ -142,6 +145,7 @@ class TransformStep(BaseModel):
     asks_readme: bool = False       # project steps may request the project's README (Phase 2 UI)
     asks_related_work: bool = False # experience steps may request JD-related work notes (Phase 2 UI)
     recommend_change: bool = True
+    recommend_drop: bool = False    # entry is irrelevant to the JD — offer to drop it (entries phase)
     reason: str = ""
 
 
@@ -157,6 +161,7 @@ class TransformSectionIn(BaseModel):
     company: str = Field(default="", max_length=200)
     kind: str
     entry: dict[str, Any] = Field(default_factory=dict)   # the single original unit (summary -> {"summary": "..."})
+    current: dict[str, Any] = Field(default_factory=dict) # the CURRENT draft being refined (bullets/text/summary) — enables surgical edits
     sources: list[str] = Field(default_factory=list)      # README / notes text — grounds allowed facts & numbers
     instruction: str = Field(default="", max_length=2000) # optional user refine comment for a regeneration
 
@@ -248,3 +253,69 @@ class GithubSummaryIn(BaseModel):
 
 class GithubSummaryOut(BaseModel):
     summary: str = ""   # short blurb derived from the README (for cards w/o an About)
+
+
+# ── Resume proofreading / "scan" (spelling, grammar, symbol/format errors) ──────
+
+
+class ProofreadUnitIn(BaseModel):
+    id: str = Field(max_length=300)        # client-side location key (opaque to the server)
+    label: str = Field(default="", max_length=200)
+    text: str = Field(default="", max_length=4000)
+
+
+class ProofreadIn(BaseModel):
+    units: list[ProofreadUnitIn] = Field(default_factory=list)
+
+
+class ProofreadFix(BaseModel):
+    category: str = "spelling"   # spelling | grammar | punctuation | symbol
+    message: str = ""            # short human description (for display only)
+    original: str = ""           # the problematic snippet (display only)
+    suggestion: str = ""         # the corrected snippet (display only)
+
+
+class ProofreadUnitOut(BaseModel):
+    id: str
+    corrected: str = ""          # full corrected unit text — the apply target (numbers preserved)
+    issues: list[ProofreadFix] = Field(default_factory=list)
+
+
+class ProofreadOut(BaseModel):
+    units: list[ProofreadUnitOut] = Field(default_factory=list)
+
+
+# ── Cover letter (one-click, JD/company/résumé-tailored) ────────────────────
+
+
+class CoverLetterContent(BaseModel):
+    """The editable, structured letter (the only part that changes per role).
+    Emphasis is marked inline with **double asterisks** (the app's bold convention)."""
+    headerTitle: str = ""                                   # tagline under the name
+    salutation: str = "Dear Hiring Team,"
+    opening: str = ""                                       # names the position + company
+    bridge: str = ""                                        # "your job description emphasizes…"
+    bullets: list[str] = Field(default_factory=list)        # bold-lead, résumé-grounded
+    closing: list[str] = Field(default_factory=list)        # company-specific closing paragraphs
+    signoff: str = "Yours Sincerely"
+    signatureName: str = ""                                 # the cursive signature line
+
+
+class CoverLetterGenerateIn(BaseModel):
+    job_description: str = Field(min_length=1)
+    company: str = Field(default="", max_length=200)
+    job_title: str = Field(default="", max_length=200)
+    data: dict[str, Any] = Field(default_factory=dict)      # the active résumé (ResumeData)
+    instruction: str = Field(default="", max_length=2000)   # optional refine comment for a regeneration
+
+
+class CoverLetterGenerateOut(BaseModel):
+    content: CoverLetterContent = Field(default_factory=CoverLetterContent)
+    warnings: list[str] = Field(default_factory=list)
+    missing_keywords: list[str] = Field(default_factory=list)
+
+
+class CoverLetterRenderIn(BaseModel):
+    content: CoverLetterContent
+    format: str = Field(default="docx")                     # 'docx' | 'pdf'
+    name: str = Field(default="", max_length=200)           # candidate name (header + filename)

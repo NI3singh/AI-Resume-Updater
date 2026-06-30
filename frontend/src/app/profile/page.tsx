@@ -88,7 +88,7 @@ export default function ProfilePage() {
         }
       }
     };
-    Promise.all([worker(), worker(), worker(), worker()]);  // 4 concurrent
+    Promise.all([worker(), worker(), worker(), worker()]).catch(() => {});  // 4 concurrent
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repos]);

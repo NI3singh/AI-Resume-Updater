@@ -7,6 +7,7 @@ import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ResumeData, ExperienceEntry } from '@/lib/types';
 import MonthYearPicker from '@/components/builder/MonthYearPicker';
 import ReorderableList from '@/components/builder/ReorderableList';
+import BulletListField from '@/components/builder/BulletListField';
 
 interface Props { data: ResumeData; onChange: (d: ResumeData) => void; }
 
@@ -31,12 +32,6 @@ export default function ExperienceSection({ data, onChange }: Props) {
   };
   const update = (id: string, patch: Partial<ExperienceEntry>) =>
     onChange({ ...data, experience: data.experience.map(e => e.id === id ? { ...e, ...patch } : e) });
-
-  const updateBullet = (id: string, idx: number, value: string) => {
-    const exp = data.experience.find(e => e.id === id)!;
-    const b = [...exp.bullets]; b[idx] = value;
-    update(id, { bullets: b });
-  };
 
   return (
     <div>
@@ -139,19 +134,12 @@ export default function ExperienceSection({ data, onChange }: Props) {
                         <button onClick={() => update(exp.id, { bullets: [...exp.bullets, ''] })} className="text-[10px] text-gold hover:text-gold-light">+ Add</button>
                       </div>
                       <p className="text-[9px] font-mono text-ink-500 mb-2">Wrap a word in **double asterisks** for bold.</p>
-                      <div className="flex flex-col gap-1.5">
-                        {exp.bullets.map((b, bi) => (
-                          <div key={bi} className="bullet-item">
-                            <textarea className="input-base flex-1 min-h-[56px] resize-none text-[11px] leading-relaxed"
-                              value={b} onChange={e => updateBullet(exp.id, bi, e.target.value)}
-                              placeholder="Led development of X, resulting in Y% improvement..." />
-                            {exp.bullets.length > 1 && (
-                              <button onClick={() => update(exp.id, { bullets: exp.bullets.filter((_, i) => i !== bi) })}
-                                className="mt-2 text-ivory-muted hover:text-crimson transition-colors flex-shrink-0"><Trash2 size={11} /></button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                      <BulletListField
+                        bullets={exp.bullets}
+                        onChange={(bullets) => update(exp.id, { bullets })}
+                        placeholder="Led development of X, resulting in Y% improvement..."
+                        minH={56}
+                      />
                     </div>
 
                   </div>

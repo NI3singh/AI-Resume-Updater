@@ -75,23 +75,29 @@ def rename_resume(
 
 
 @router.post("/fork", response_model=ResumeOut, status_code=status.HTTP_201_CREATED)
-def fork_from_master(
+def fork_resume(
     payload: ForkIn,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Resume:
-    # By default the branch copies the master; the Transform feature passes
-    # explicit resume_data/section_config to branch with tailored content.
-    master = _get_master(db, current_user)
+    # Fork from an explicit source resume when given (any owned version, master
+    # or branch), otherwise from the master. The Transform feature passes
+    # explicit resume_data/section_config, which then takes precedence over the
+    # source copy.
+    source = (
+        _get_owned_resume(db, current_user, payload.source_id)
+        if payload.source_id is not None
+        else _get_master(db, current_user)
+    )
     version = Resume(
         user_id=current_user.id,
         name=payload.name,
         is_master=False,
         resume_data=copy.deepcopy(
-            payload.resume_data if payload.resume_data is not None else master.resume_data
+            payload.resume_data if payload.resume_data is not None else source.resume_data
         ),
         section_config=copy.deepcopy(
-            payload.section_config if payload.section_config is not None else master.section_config
+            payload.section_config if payload.section_config is not None else source.section_config
         ),
     )
     db.add(version)

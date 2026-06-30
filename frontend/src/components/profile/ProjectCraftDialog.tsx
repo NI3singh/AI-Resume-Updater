@@ -14,6 +14,7 @@ import {
   fetchProjectTree, craftGithubProject, refineGithubProject,
 } from '@/lib/github';
 import { Spinner } from '@/components/ui/Spinner';
+import ReorderableBullets from '@/components/builder/ReorderableBullets';
 
 interface Props {
   repo: GithubRepo;
@@ -129,11 +130,8 @@ export default function ProjectCraftDialog({ repo, onAdd, onClose }: Props) {
 
   // Review editors
   const setField = (patch: Partial<CraftedProjectFields>) => setProject((p) => (p ? { ...p, ...patch } : p));
-  const setBullet = (idx: number, val: string) =>
-    setProject((p) => { if (!p) return p; const b = [...p.bullets]; b[idx] = val; return { ...p, bullets: b }; });
+  const setBullets = (bullets: string[]) => setProject((p) => (p ? { ...p, bullets } : p));
   const addBullet = () => setProject((p) => (p ? { ...p, bullets: [...p.bullets, ''] } : p));
-  const removeBullet = (idx: number) =>
-    setProject((p) => (p ? { ...p, bullets: p.bullets.filter((_, i) => i !== idx) } : p));
 
   const confirmAdd = async () => {
     if (!project || saving) return;
@@ -201,7 +199,7 @@ export default function ProjectCraftDialog({ repo, onAdd, onClose }: Props) {
               <Spinner size={40} />
               <p className="text-ivory text-sm font-medium mt-3">Reading your code…</p>
               <p className="text-ivory/40 text-xs mt-1">
-                Analyzing {Math.min(selected.size, MAX_FILES)} file{selected.size === 1 ? '' : 's'} + README — reasoning models take ~15–40s
+                Analyzing {Math.min(selected.size, MAX_FILES)} file{selected.size === 1 ? '' : 's'} + README, then fact-checking the draft — reasoning models take ~30–60s
               </p>
             </div>
           )}
@@ -287,17 +285,23 @@ export default function ProjectCraftDialog({ repo, onAdd, onClose }: Props) {
               <div>
                 <label className="text-[10px] uppercase tracking-wide text-ink-500 mb-1.5 block">Bullets</label>
                 <div className="space-y-1.5">
-                  {project.bullets.map((b, k) => (
-                    <div key={k} className="flex items-start gap-1.5">
-                      <textarea
-                        value={b}
-                        onChange={(e) => setBullet(k, e.target.value)}
-                        rows={2}
-                        className="input-base flex-1 !text-[11px] !leading-relaxed resize-y min-h-[44px] !py-1.5 !px-2"
-                      />
-                      <button onClick={() => removeBullet(k)} className="mt-1.5 text-ivory-dim hover:text-crimson transition-colors flex-shrink-0" title="Remove bullet"><Trash2 size={12} /></button>
-                    </div>
-                  ))}
+                  <ReorderableBullets
+                    bullets={project.bullets}
+                    onChange={setBullets}
+                    className="space-y-1.5"
+                    renderBullet={({ value, setValue, remove, dragHandle }) => (
+                      <div className="flex items-start gap-1.5">
+                        {dragHandle}
+                        <textarea
+                          value={value}
+                          onChange={(e) => setValue(e.target.value)}
+                          rows={3}
+                          className="input-base flex-1 !text-[11px] !leading-relaxed resize-y min-h-[44px] !py-1.5 !px-2"
+                        />
+                        <button onClick={remove} className="mt-1.5 text-ivory-dim hover:text-crimson transition-colors flex-shrink-0 cursor-pointer" title="Remove bullet"><Trash2 size={12} /></button>
+                      </div>
+                    )}
+                  />
                   <button onClick={addBullet} className="flex items-center gap-1 text-[10px] text-gold hover:text-gold-light"><Plus size={11} /> Add bullet</button>
                 </div>
               </div>
@@ -329,14 +333,14 @@ export default function ProjectCraftDialog({ repo, onAdd, onClose }: Props) {
 
               {/* Refine with a comment */}
               <div className="border-t border-ink-700/50 pt-3">
-                <label className="text-[10px] uppercase tracking-wide text-ink-500 mb-1.5 block">Want changes or something added? Tell the AI</label>
+                <label className="text-[10px] uppercase tracking-wide text-ink-500 mb-1.5 block">Edit with a comment — keep, change, add or remove bullets</label>
                 <div className="flex items-start gap-2">
                   <textarea
                     value={instruction}
                     onChange={(e) => setInstruction(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !regenerating) regenerate(); }}
                     rows={2}
-                    placeholder="e.g. emphasize the ML pipeline · mention WebSockets · shorter · highlight the CI/CD"
+                    placeholder="e.g. keep bullets 1–3 and add a 4th about Docker deployment · make it 3 bullets · merge the last two · emphasize the ML pipeline"
                     className="input-base flex-1 !text-[11px] !leading-relaxed resize-y min-h-[40px]"
                   />
                   <button
@@ -349,7 +353,7 @@ export default function ProjectCraftDialog({ repo, onAdd, onClose }: Props) {
                   </button>
                 </div>
                 <p className="text-[10px] text-ivory/35 mt-1 leading-relaxed">
-                  Grounded in your code — facts/numbers not in the repo (or your note) are stripped. (⌘/Ctrl+Enter)
+                  Agentic — say what to keep, change, add, or remove and only that changes. Grounded in your code; facts/numbers not in the repo (or your note) are stripped. (⌘/Ctrl+Enter)
                 </p>
               </div>
             </div>

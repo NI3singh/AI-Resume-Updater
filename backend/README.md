@@ -33,7 +33,7 @@ user. New users are seeded with a neutral template (`app/template_data.py`).
 | GET    | `/resumes`                            | List the user's resumes             |
 | PATCH  | `/resumes/{id}`                       | Update resume data/section config   |
 | PATCH  | `/resumes/{id}/name`                  | Rename                              |
-| POST   | `/resumes/fork`                       | New version copied from master      |
+| POST   | `/resumes/fork`                       | New version from a source (master by default; any version via `source_id`) |
 | POST   | `/resumes/{id}/restore-from-master`   | Reset a version to match master     |
 | DELETE | `/resumes/{id}`                       | Delete a version (master protected) |
 
