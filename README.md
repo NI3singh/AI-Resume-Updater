@@ -16,6 +16,20 @@ letter, and compile a pixel-perfect PDF in one click. No LaTeX knowledge needed.
 
 ---
 
+## 🎬 Watch the Website Tour
+
+<div align="center">
+
+<a href="https://youtu.be/NFoiecE-uYs?si=tLaJnazA-xBl4AEt">
+  <img src="docs/tour-poster.png" alt="Watch the demo" width="820">
+</a>
+
+</div>
+
+*`docs/website-tour.mp4` — a 40-second walkthrough of the live product, rendered with Remotion from real app screenshots.*
+
+---
+
 ## Four ways to build
 
 | Mode | What it does |
