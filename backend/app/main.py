@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .database import init_db
-from .routers import auth, github, resumes, tools
+from .routers import auth, cover_letter, github, resumes, tools
 
 
 @asynccontextmanager
@@ -32,6 +32,7 @@ app.include_router(auth.router)
 app.include_router(resumes.router)
 app.include_router(tools.router)
 app.include_router(github.router)
+app.include_router(cover_letter.router)
 
 
 # ── Landing page ─────────────────────────────────────────────────────────────

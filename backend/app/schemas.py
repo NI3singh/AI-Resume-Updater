@@ -283,3 +283,39 @@ class ProofreadUnitOut(BaseModel):
 
 class ProofreadOut(BaseModel):
     units: list[ProofreadUnitOut] = Field(default_factory=list)
+
+
+# ── Cover letter (one-click, JD/company/résumé-tailored) ────────────────────
+
+
+class CoverLetterContent(BaseModel):
+    """The editable, structured letter (the only part that changes per role).
+    Emphasis is marked inline with **double asterisks** (the app's bold convention)."""
+    headerTitle: str = ""                                   # tagline under the name
+    salutation: str = "Dear Hiring Team,"
+    opening: str = ""                                       # names the position + company
+    bridge: str = ""                                        # "your job description emphasizes…"
+    bullets: list[str] = Field(default_factory=list)        # bold-lead, résumé-grounded
+    closing: list[str] = Field(default_factory=list)        # company-specific closing paragraphs
+    signoff: str = "Yours Sincerely"
+    signatureName: str = ""                                 # the cursive signature line
+
+
+class CoverLetterGenerateIn(BaseModel):
+    job_description: str = Field(min_length=1)
+    company: str = Field(default="", max_length=200)
+    job_title: str = Field(default="", max_length=200)
+    data: dict[str, Any] = Field(default_factory=dict)      # the active résumé (ResumeData)
+    instruction: str = Field(default="", max_length=2000)   # optional refine comment for a regeneration
+
+
+class CoverLetterGenerateOut(BaseModel):
+    content: CoverLetterContent = Field(default_factory=CoverLetterContent)
+    warnings: list[str] = Field(default_factory=list)
+    missing_keywords: list[str] = Field(default_factory=list)
+
+
+class CoverLetterRenderIn(BaseModel):
+    content: CoverLetterContent
+    format: str = Field(default="docx")                     # 'docx' | 'pdf'
+    name: str = Field(default="", max_length=200)           # candidate name (header + filename)

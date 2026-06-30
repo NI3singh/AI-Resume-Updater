@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Download, FileCode, Eye,
   Zap, Copy, Check, Save, LogOut, CloudOff, Cloud,
-  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine, Target, UserCircle, ScanLine,
+  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine, Target, UserCircle, ScanLine, FileSignature,
 } from 'lucide-react';
 import { ResumeData, SectionConfig, ActiveSection, ALL_SECTIONS } from '@/lib/types';
 import { generateLatex } from '@/lib/latexTemplate';
@@ -22,6 +22,7 @@ import ThemeToggle from '@/components/ui/ThemeToggle';
 import ResumeSwitcher from '@/components/builder/ResumeSwitcher';
 import UploadPanel from '@/components/builder/UploadPanel';
 import TransformPanel from '@/components/builder/TransformPanel';
+import CoverLetterPanel from '@/components/builder/CoverLetterPanel';
 import { LogoMark } from '@/components/ui/Logo';
 import { Spinner, PageLoader } from '@/components/ui/Spinner';
 import { useAuth } from '@/context/AuthContext';
@@ -54,7 +55,7 @@ function BuilderContent() {
   }, [user, authLoading]);
 
   const [activeSection, setActiveSection] = useState<ActiveSection>('personal');
-  const [builderMode, setBuilderMode]   = useState<'manual' | 'upload' | 'transform'>('manual');
+  const [builderMode, setBuilderMode]   = useState<'manual' | 'upload' | 'transform' | 'coverletter'>('manual');
   const [latexCode, setLatexCode]       = useState('');
   const [previewTab, setPreviewTab]     = useState<PreviewTab>('preview');
   const [isCompiling, setIsCompiling]   = useState(false);
@@ -550,6 +551,16 @@ function BuilderContent() {
               <Target size={12} />
               <span className="hidden lg:inline">Transform</span>
             </button>
+            <button
+              onClick={() => setBuilderMode('coverletter')}
+              title="Generate a tailored cover letter from a job description"
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-all duration-200 cursor-pointer ${
+                builderMode === 'coverletter' ? 'bg-gold/15 text-gold shadow-sm' : 'text-ivory-muted hover:text-ivory'
+              }`}
+            >
+              <FileSignature size={12} />
+              <span className="hidden lg:inline">Cover Letter</span>
+            </button>
           </div>
 
         </div>
@@ -670,13 +681,18 @@ function BuilderContent() {
             />
           ) : builderMode === 'upload' ? (
             <UploadPanel onImport={handleImport} />
-          ) : (
+          ) : builderMode === 'transform' ? (
             <TransformPanel
               data={resumeData}
               sectionConfig={sectionConfig}
               hasContent={hasContent}
               onApply={handleImport}
               onSaveBranch={handleSaveBranch}
+            />
+          ) : (
+            <CoverLetterPanel
+              data={resumeData}
+              hasContent={hasContent}
             />
           )}
         </div>
