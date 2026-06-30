@@ -9,12 +9,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Download, FileCode, Eye,
   Zap, Copy, Check, Save, LogOut, CloudOff, Cloud,
-  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine, Target, UserCircle,
+  Undo2, RotateCcw, AlertTriangle, UploadCloud, PencilLine, Target, UserCircle, ScanLine,
 } from 'lucide-react';
 import { ResumeData, SectionConfig, ActiveSection, ALL_SECTIONS } from '@/lib/types';
 import { generateLatex } from '@/lib/latexTemplate';
 import { compileToPDF, downloadBlob, downloadLatex, resumeFileBase } from '@/lib/pdfCompiler';
+import { scanResume, applyFix, applyAll, FieldFix } from '@/lib/proofread';
 import FormPanel from '@/components/builder/FormPanel';
+import ScanOverlay from '@/components/builder/ScanOverlay';
+import ScanResults from '@/components/builder/ScanResults';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import ResumeSwitcher from '@/components/builder/ResumeSwitcher';
 import UploadPanel from '@/components/builder/UploadPanel';
@@ -61,6 +64,17 @@ function BuilderContent() {
 
   const [resumeData, setResumeData]       = useState<ResumeData | null>(null);
   const [sectionConfig, setSectionConfig] = useState<SectionConfig[]>(ALL_SECTIONS);
+
+  // Latest resumeData (so scan-fix applies always build on the freshest content).
+  const resumeDataRef = useRef<ResumeData | null>(resumeData);
+  useEffect(() => { resumeDataRef.current = resumeData; }, [resumeData]);
+
+  // ── Resume scan (proofread) ─────────────────────────────────────────────────
+  const [scanOpen, setScanOpen]     = useState(false);
+  const [scanning, setScanning]     = useState(false);
+  const [scanFixes, setScanFixes]   = useState<FieldFix[]>([]);
+  const [scanAiOk, setScanAiOk]     = useState(true);
+  const [scanError, setScanError]   = useState('');
 
   // ── Resizable form panel (drag the divider on its right edge) ───────────────
   const [formWidth, setFormWidth]   = useState(DEFAULT_FORM_W);
@@ -291,6 +305,64 @@ function BuilderContent() {
       setIsCompiling(false);
     }
   };
+
+  // ── Resume scan: commit a fixed copy + recompile so the PDF updates ─────────
+  const commitScanData = useCallback(async (newData: ResumeData) => {
+    setResumeData(newData);
+    pushHistory({ resumeData: newData, sectionConfig });
+    setHasUnsaved(true);
+    setIsCompiling(true); setCompileError('');
+    try {
+      const blob = await compileToPDF(generateLatex(newData, sectionConfig));
+      setPdfUrl(URL.createObjectURL(blob));
+      setPreviewTab('preview');
+    } catch (err) {
+      setCompileError(err instanceof Error ? err.message : 'Compilation failed');
+    } finally {
+      setIsCompiling(false);
+    }
+  }, [sectionConfig, pushHistory]);
+
+  const runScan = useCallback(async () => {
+    if (!resumeData || scanning) return;
+    setScanOpen(true); setScanning(true); setScanError(''); setScanFixes([]); setScanAiOk(true);
+    setPreviewTab('preview');
+    // Make sure a PDF is visible to sweep the scan line over (cosmetic).
+    if (!pdfUrl && latexCode) {
+      try {
+        const blob = await compileToPDF(latexCode);
+        setPdfUrl(URL.createObjectURL(blob));
+      } catch { /* the scan still runs on the résumé data */ }
+    }
+    const started = Date.now();
+    try {
+      const { fixes, aiOk } = await scanResume(resumeData);
+      const elapsed = Date.now() - started;       // keep the animation on screen briefly
+      if (elapsed < 1600) await new Promise((r) => setTimeout(r, 1600 - elapsed));
+      setScanFixes(fixes);
+      setScanAiOk(aiOk);
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Could not scan the résumé. Please try again.');
+    } finally {
+      setScanning(false);
+    }
+  }, [resumeData, scanning, pdfUrl, latexCode]);
+
+  const applyScanFix = useCallback(async (fix: FieldFix) => {
+    setScanFixes((prev) => prev.filter((f) => f.locId !== fix.locId));
+    const latest = resumeDataRef.current;
+    if (!latest) return;
+    const { data, applied } = applyFix(latest, fix);
+    if (applied) await commitScanData(data);
+  }, [commitScanData]);
+
+  const applyAllScanFixes = useCallback(async () => {
+    const latest = resumeDataRef.current;
+    if (!latest || !scanFixes.length) return;
+    const { data, applied } = applyAll(latest, scanFixes);
+    setScanFixes([]);
+    if (applied) await commitScanData(data);
+  }, [scanFixes, commitScanData]);
 
   // ── Save tailored data as a new resume branch (Transform mode) ──────────────
   // Forks with explicit content; the new branch becomes active and the existing
@@ -648,6 +720,15 @@ function BuilderContent() {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Scan résumé for spelling / grammar / symbol errors */}
+              <button
+                onClick={runScan}
+                disabled={scanning || !hasContent}
+                title="Scan the résumé for spelling, grammar & symbol errors"
+                className="flex items-center gap-1 text-xs text-ivory-dim hover:text-[#34d399] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ScanLine size={13} /> {scanning ? 'Scanning…' : 'Scan'}
+              </button>
               {compileError && (
                 <span className="text-[10px] text-crimson font-mono bg-crimson/10 border border-crimson/20 px-2 py-1 rounded-md truncate max-w-xs">
                   {compileError}
@@ -715,7 +796,7 @@ function BuilderContent() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex-1 overflow-hidden flex items-center justify-center bg-ink-900/40"
+                className="relative flex-1 overflow-hidden flex items-center justify-center bg-ink-900/40"
               >
                 {pdfUrl ? (
                   <iframe src={`${pdfUrl}#toolbar=0`} className="w-full h-full border-0" title="PDF Preview" />
@@ -736,6 +817,7 @@ function BuilderContent() {
                     </button>
                   </div>
                 )}
+                {scanning && <ScanOverlay />}
               </motion.div>
             )}
           </AnimatePresence>
@@ -793,6 +875,22 @@ function BuilderContent() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Résumé scan drawer ──────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {scanOpen && (
+          <ScanResults
+            fixes={scanFixes}
+            scanning={scanning}
+            aiOk={scanAiOk}
+            error={scanError}
+            onApply={applyScanFix}
+            onApplyAll={applyAllScanFixes}
+            onRescan={runScan}
+            onClose={() => setScanOpen(false)}
+          />
         )}
       </AnimatePresence>
     </div>

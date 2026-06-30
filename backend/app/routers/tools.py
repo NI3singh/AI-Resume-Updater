@@ -18,6 +18,7 @@ the LLM how to map each URL back onto the right field.
 
 import io
 import json
+import re
 
 import httpx
 from docx import Document as DocxDocument
@@ -33,6 +34,10 @@ from ..schemas import (
     ExtractOut,
     ParseIn,
     ParseOut,
+    ProofreadFix,
+    ProofreadIn,
+    ProofreadOut,
+    ProofreadUnitOut,
     TransformPlanIn,
     TransformPlanOut,
     TransformSectionAdvice,
@@ -803,6 +808,110 @@ def transform_section(
         warnings=warnings,
         no_change_recommended=bool(result.get("no_change_recommended")),
     )
+
+
+# ── Proofread / scan (spelling, grammar, symbol/format errors) ───────────────
+_PROOFREAD_MAX_UNITS = 80
+_PROOFREAD_UNIT_LIMIT = 2000
+_DIGIT_RE = re.compile(r"\d[\d,.]*")
+
+
+def _digits(text: str) -> set[str]:
+    """Normalized numeric tokens — used to guarantee a proofread never alters a
+    number ('1,200.' -> '1200')."""
+    return {m.replace(",", "").rstrip(".") for m in _DIGIT_RE.findall(text or "")}
+
+
+PROOFREAD_SYSTEM = (
+    "You are a meticulous résumé proofreader. You receive a JSON array of UNITS "
+    "(each {id, label, text}) — short pieces of a résumé such as a summary or a "
+    "single bullet. For each unit, find ONLY genuine errors and return a corrected "
+    "version of its text.\n\n"
+    "FIX: spelling mistakes, obvious typos, doubled words, double spaces, missing "
+    "or extra spaces around punctuation, garbled/mojibake characters (e.g. "
+    "â€™, Ã©), and clear, unambiguous grammar errors.\n"
+    "DO NOT: rephrase or change wording/style, change the meaning, add or remove "
+    "information, change any number, date, percentage, or metric, or 'correct' "
+    "proper nouns, company names, or technical terms (e.g. PostgreSQL, Kubernetes, "
+    "FastAPI, Zustand, Next.js). Preserve **bold** markers and the capitalization "
+    "of real tech terms. If a unit has no genuine error, leave it unchanged. When "
+    "in doubt, leave it.\n\n"
+    "Return ONLY JSON (no markdown):\n"
+    "{\n"
+    '  "units": [\n'
+    '    { "id": "<same id>", "corrected": "<full corrected text>",\n'
+    '      "issues": [ { "category": "spelling|grammar|punctuation|symbol", '
+    '"message": "<=8 words, e.g. recieve -> receive", "original": "recieve", '
+    '"suggestion": "receive" } ] }\n'
+    "  ]\n"
+    "}\n"
+    "Only include a unit when you actually changed its text. 'corrected' must be "
+    "the FULL text of that unit with the fixes applied, never a fragment."
+)
+
+
+@router.post("/proofread", response_model=ProofreadOut)
+def proofread(payload: ProofreadIn, current_user: User = Depends(get_current_user)) -> ProofreadOut:
+    """Proofread résumé text units for spelling / grammar / symbol errors. Returns,
+    per changed unit, the FULL corrected text (numbers guaranteed unchanged) plus
+    granular issues for display. The client applies a fix by replacing that unit's
+    field with ``corrected`` (and can undo it). Deterministic format checks run on
+    the client; this is the semantic (LLM) pass."""
+    seen: set[str] = set()
+    packed: list[dict] = []
+    by_id: dict[str, str] = {}
+    total = 0
+    for u in payload.units:
+        text = (u.text or "")[:_PROOFREAD_UNIT_LIMIT]
+        if not text.strip() or u.id in seen:
+            continue
+        if len(packed) >= _PROOFREAD_MAX_UNITS or total + len(text) > settings.parse_text_limit:
+            break
+        seen.add(u.id)
+        by_id[u.id] = text
+        packed.append({"id": u.id, "label": (u.label or "")[:120], "text": text})
+        total += len(text)
+
+    if not packed:
+        return ProofreadOut(units=[])
+
+    try:
+        result = chat_json(
+            PROOFREAD_SYSTEM, "UNITS (JSON):\n" + json.dumps(packed, ensure_ascii=False),
+            max_tokens=4096, temperature=0.0,
+        )
+    except LLMNotConfigured as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except LLMError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    out: list[ProofreadUnitOut] = []
+    for r in (result.get("units") if isinstance(result, dict) else None) or []:
+        if not isinstance(r, dict):
+            continue
+        uid = str(r.get("id") or "")
+        original = by_id.get(uid)
+        if original is None:
+            continue
+        corrected = str(r.get("corrected") or "").strip()
+        # Only a real, number-preserving change is offered as a one-click fix.
+        if not corrected or corrected == original.strip() or _digits(corrected) != _digits(original):
+            continue
+        issues: list[ProofreadFix] = []
+        for it in (r.get("issues") or []):
+            if not isinstance(it, dict):
+                continue
+            msg = str(it.get("message") or "").strip()
+            if not msg:
+                continue
+            issues.append(ProofreadFix(
+                category=(str(it.get("category") or "spelling").strip().lower() or "spelling")[:20],
+                message=msg[:120],
+                original=str(it.get("original") or "")[:200],
+                suggestion=str(it.get("suggestion") or "")[:200],
+            ))
+        out.append(ProofreadUnitOut(id=uid, corrected=corrected, issues=issues))
+    return ProofreadOut(units=out)
 
 
 @router.post("/compile")

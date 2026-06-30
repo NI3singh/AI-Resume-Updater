@@ -253,3 +253,33 @@ class GithubSummaryIn(BaseModel):
 
 class GithubSummaryOut(BaseModel):
     summary: str = ""   # short blurb derived from the README (for cards w/o an About)
+
+
+# ── Resume proofreading / "scan" (spelling, grammar, symbol/format errors) ──────
+
+
+class ProofreadUnitIn(BaseModel):
+    id: str = Field(max_length=300)        # client-side location key (opaque to the server)
+    label: str = Field(default="", max_length=200)
+    text: str = Field(default="", max_length=4000)
+
+
+class ProofreadIn(BaseModel):
+    units: list[ProofreadUnitIn] = Field(default_factory=list)
+
+
+class ProofreadFix(BaseModel):
+    category: str = "spelling"   # spelling | grammar | punctuation | symbol
+    message: str = ""            # short human description (for display only)
+    original: str = ""           # the problematic snippet (display only)
+    suggestion: str = ""         # the corrected snippet (display only)
+
+
+class ProofreadUnitOut(BaseModel):
+    id: str
+    corrected: str = ""          # full corrected unit text — the apply target (numbers preserved)
+    issues: list[ProofreadFix] = Field(default_factory=list)
+
+
+class ProofreadOut(BaseModel):
+    units: list[ProofreadUnitOut] = Field(default_factory=list)
