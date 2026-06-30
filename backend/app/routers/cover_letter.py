@@ -76,8 +76,12 @@ COVER_LETTER_SYSTEM = (
     "keywords ONLY where the résumé genuinely supports them.\n"
     "- ~250-350 words, confident and specific — not generic filler.\n"
     "- Mark key skills/terms and the bullet lead-ins with **double asterisks** for "
-    "bold. Do NOT leave placeholders like [Company]; fill them in.\n\n"
-    "Return ONLY JSON (no markdown):\n"
+    "bold. Do NOT leave placeholders like [Company]; fill them in.\n"
+    "- Output MUST be ONE valid JSON object — no markdown, no code fences, no text "
+    "before or after. Inside string values NEVER use the double-quote character "
+    "(write names plainly or in 'single quotes'); never put a line break inside a "
+    "string value.\n\n"
+    "JSON shape:\n"
     "{\n"
     '  "headerTitle": "a short professional title for the candidate (from the résumé)",\n'
     '  "salutation": "Dear ... Hiring Team,",\n'
