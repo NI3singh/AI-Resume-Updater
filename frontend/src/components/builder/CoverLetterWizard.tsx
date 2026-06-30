@@ -30,12 +30,11 @@ function renderRich(text: string): ReactNode[] {
   const re = /(\*\*[^*]+\*\*|__[^_]+__)/g;
   let last = 0;
   let m: RegExpExecArray | null;
-  let k = 0;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index));
     const s = m[0];
-    if (s.startsWith('**')) out.push(<strong key={k++}>{s.slice(2, -2)}</strong>);
-    else out.push(<u key={k++}>{s.slice(2, -2)}</u>);
+    if (s.startsWith('**')) out.push(<strong key={m.index}>{s.slice(2, -2)}</strong>);
+    else out.push(<u key={m.index}>{s.slice(2, -2)}</u>);
     last = m.index + s.length;
   }
   if (last < text.length) out.push(text.slice(last));

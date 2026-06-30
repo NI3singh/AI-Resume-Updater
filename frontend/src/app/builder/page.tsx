@@ -52,7 +52,7 @@ function BuilderContent() {
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
-  }, [user, authLoading]);
+  }, [user, authLoading, router]);
 
   const [activeSection, setActiveSection] = useState<ActiveSection>('personal');
   const [builderMode, setBuilderMode]   = useState<'manual' | 'upload' | 'transform' | 'coverletter'>('manual');
@@ -192,6 +192,10 @@ function BuilderContent() {
     setLatexCode(generateLatex(resumeData, sectionConfig));
     if (pdfUrl) { URL.revokeObjectURL(pdfUrl); setPdfUrl(''); }
   }, [resumeData, sectionConfig]);
+
+  // Revoke the previous PDF blob URL when it's replaced or on unmount — without
+  // this, recompiling (or leaving the page) leaks object URLs.
+  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
 
   // ── Keyboard shortcut Ctrl/Cmd+Z ────────────────────────────────────────────
   useEffect(() => {

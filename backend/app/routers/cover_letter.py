@@ -438,7 +438,7 @@ def generate(
 def render(payload: CoverLetterRenderIn, current_user: User = Depends(get_current_user)) -> Response:
     """Fill the template with the (edited) content and return DOCX or PDF bytes."""
     docx_bytes = _fill_template(payload.content, payload.name.strip())
-    safe = re.sub(r"[^\w-]+", "_", payload.name.strip()).strip("_") or "Cover_Letter"
+    safe = re.sub(r"[^\w-]+", "_", payload.name.strip()).strip("_")[:80] or "Cover_Letter"
     if payload.format.lower() == "pdf":
         pdf = _docx_to_pdf(docx_bytes)
         return Response(

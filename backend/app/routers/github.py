@@ -421,7 +421,7 @@ def github_repos(
         with httpx.Client(timeout=20.0, headers=_gh_headers()) as client:
             for page in (1, 2):  # up to 200 repos
                 resp = client.get(
-                    f"{settings.github_api_url}/users/{username}/repos",
+                    f"{settings.github_api_url}/users/{quote(username, safe='')}/repos",
                     params={"per_page": 100, "sort": "updated", "type": "owner", "page": page},
                 )
                 _raise_for_gh_status(resp.status_code, not_found="GitHub user not found.")
