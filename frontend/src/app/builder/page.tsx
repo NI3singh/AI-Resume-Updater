@@ -15,13 +15,16 @@ import { ResumeData, SectionConfig, ActiveSection, ALL_SECTIONS } from '@/lib/ty
 import { generateLatex } from '@/lib/latexTemplate';
 import { compileToPDF, downloadBlob, downloadLatex, resumeFileBase } from '@/lib/pdfCompiler';
 import { scanResume, applyFix, applyAll, FieldFix } from '@/lib/proofread';
+import {
+  clearBuilderDraft, peekBuilderDraft, readTransformResult, clearTransformResult,
+  stashBuilderDraft, writeTransformHandoff,
+} from '@/lib/transformSession';
 import FormPanel from '@/components/builder/FormPanel';
 import ScanOverlay from '@/components/builder/ScanOverlay';
 import ScanResults from '@/components/builder/ScanResults';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import ResumeSwitcher from '@/components/builder/ResumeSwitcher';
 import UploadPanel from '@/components/builder/UploadPanel';
-import TransformPanel from '@/components/builder/TransformPanel';
 import CoverLetterPanel from '@/components/builder/CoverLetterPanel';
 import { LogoMark } from '@/components/ui/Logo';
 import { Spinner, PageLoader } from '@/components/ui/Spinner';
@@ -55,7 +58,7 @@ function BuilderContent() {
   }, [user, authLoading, router]);
 
   const [activeSection, setActiveSection] = useState<ActiveSection>('personal');
-  const [builderMode, setBuilderMode]   = useState<'manual' | 'upload' | 'transform' | 'coverletter'>('manual');
+  const [builderMode, setBuilderMode]   = useState<'manual' | 'upload' | 'coverletter'>('manual');
   const [latexCode, setLatexCode]       = useState('');
   const [previewTab, setPreviewTab]     = useState<PreviewTab>('preview');
   const [isCompiling, setIsCompiling]   = useState(false);
@@ -175,6 +178,24 @@ function BuilderContent() {
       resumeData:    activeResume.resume_data,
       sectionConfig: activeResume.section_config?.length ? activeResume.section_config : ALL_SECTIONS,
     };
+    // Unsaved edits stashed before navigating to the Transform studio are
+    // restored here — still flagged unsaved, with the saved version as the
+    // undo baseline so Revert/Ctrl+Z behave exactly as before the detour.
+    const draft = peekBuilderDraft(activeResume.id);
+    if (draft) {
+      clearBuilderDraft(activeResume.id);
+      const draftSnap: Snapshot = { resumeData: draft.resumeData, sectionConfig: draft.sectionConfig };
+      skipPush.current = true;
+      setResumeData(draftSnap.resumeData);
+      setSectionConfig(draftSnap.sectionConfig);
+      lastSaved.current  = snap;
+      undoStack.current  = [snap, draftSnap];
+      undoIndex.current  = 1;
+      setUndoCount(1);
+      setHasUnsaved(true);
+      setTimeout(() => { skipPush.current = false; }, 50);
+      return;
+    }
     skipPush.current = true;
     setResumeData(snap.resumeData);
     setSectionConfig(snap.sectionConfig);
@@ -185,6 +206,46 @@ function BuilderContent() {
     setHasUnsaved(false);
     setTimeout(() => { skipPush.current = false; }, 50);
   }, [activeResume?.id]);
+
+  // ── Consume a Transform result returned from /builder/transform ─────────────
+  // Applies the tailored data (+ tailored layout) as an UNSAVED, undoable change
+  // on top of the just-loaded server state, then compiles so the PDF updates.
+  const transformResultDone = useRef(false);
+  useEffect(() => {
+    if (!activeResume || transformResultDone.current) return;
+    const result = readTransformResult();
+    if (!result || result.resumeId !== activeResume.id) return;
+    transformResultDone.current = true;
+    clearTransformResult();
+
+    const baseSnap: Snapshot = {
+      resumeData:    activeResume.resume_data,
+      sectionConfig: activeResume.section_config?.length ? activeResume.section_config : ALL_SECTIONS,
+    };
+    const cfg: SectionConfig[] =
+      result.sectionConfig && result.sectionConfig.length
+        ? result.sectionConfig
+        : baseSnap.sectionConfig;
+    const merged: ResumeData = { ...result.data };
+
+    skipPush.current = true;
+    setResumeData(merged);
+    setSectionConfig(cfg);
+    lastSaved.current = baseSnap;
+    undoStack.current = [baseSnap, { resumeData: merged, sectionConfig: cfg }];
+    undoIndex.current = 1;
+    setUndoCount(1);
+    setHasUnsaved(true);
+    setBuilderMode('manual');
+    setActiveSection('personal');
+    setTimeout(() => { skipPush.current = false; }, 50);
+
+    setIsCompiling(true); setCompileError('');
+    compileToPDF(generateLatex(merged, cfg))
+      .then(blob => { setPdfUrl(URL.createObjectURL(blob)); setPreviewTab('preview'); })
+      .catch((err: unknown) => setCompileError(err instanceof Error ? err.message : 'Compilation failed'))
+      .finally(() => setIsCompiling(false));
+  }, [activeResume]);
 
   // ── Regenerate LaTeX ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -371,30 +432,19 @@ function BuilderContent() {
     if (applied) await commitScanData(data);
   }, [scanFixes, commitScanData]);
 
-  // ── Save tailored data as a new resume branch (Transform mode) ──────────────
-  // Forks with explicit content; the new branch becomes active and the existing
-  // activeResume effect loads it with a clean undo/saved baseline.
-  const handleSaveBranch = async (name: string, data: ResumeData, sectionConfigOverride?: SectionConfig[]): Promise<boolean> => {
-    const merged: ResumeData = { ...data, custom: resumeData?.custom ?? [] };
-    const branchConfig = sectionConfigOverride ?? sectionConfig;
-    if (hasUnsaved) {
-      const proceed = await new Promise<boolean>(resolve => {
-        setConfirmDialog({
-          title: 'Create branch and switch to it?',
-          message: `Your unsaved edits to "${activeResume?.name ?? 'this resume'}" will be left behind (last saved version kept). The tailored resume is saved as the new branch.`,
-          confirmLabel: 'Create branch',
-          tone: 'gold',
-          onConfirm: () => { setConfirmDialog(null); resolve(true); },
-          onCancel: () => resolve(false),
-        });
-      });
-      if (!proceed) return false;
-    }
-    const created = await forkResume(name, { resumeData: merged, sectionConfig: branchConfig });
-    if (!created) return false;
-    setBuilderMode('manual');
-    setActiveSection('personal');
-    return true;
+  // ── Transform studio (dedicated page) ────────────────────────────────────────
+  // Stash any unsaved edits so they survive the detour, hand the current resume
+  // to the studio via sessionStorage, then navigate.
+  const goTransform = () => {
+    if (!activeResume || !resumeData) return;
+    if (hasUnsaved) stashBuilderDraft(activeResume.id, { resumeData, sectionConfig });
+    writeTransformHandoff({
+      resumeId: activeResume.id,
+      resumeName: activeResume.name,
+      resumeData,
+      sectionConfig,
+    });
+    router.push('/builder/transform');
   };
 
   // Whether there is anything tailorable beyond personal info (mirrors the
@@ -546,11 +596,9 @@ function BuilderContent() {
               <span className="hidden lg:inline">Upload</span>
             </button>
             <button
-              onClick={() => setBuilderMode('transform')}
-              title="Tailor this resume to a job description with AI"
-              className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-all duration-200 cursor-pointer ${
-                builderMode === 'transform' ? 'bg-gold/15 text-gold shadow-sm' : 'text-ivory-muted hover:text-ivory'
-              }`}
+              onClick={goTransform}
+              title="Open the AI tailoring studio for this resume"
+              className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-all duration-200 cursor-pointer text-gold hover:bg-gold/10"
             >
               <Target size={12} />
               <span className="hidden lg:inline">Transform</span>
@@ -685,14 +733,6 @@ function BuilderContent() {
             />
           ) : builderMode === 'upload' ? (
             <UploadPanel onImport={handleImport} />
-          ) : builderMode === 'transform' ? (
-            <TransformPanel
-              data={resumeData}
-              sectionConfig={sectionConfig}
-              hasContent={hasContent}
-              onApply={handleImport}
-              onSaveBranch={handleSaveBranch}
-            />
           ) : (
             <CoverLetterPanel
               data={resumeData}

@@ -138,7 +138,7 @@ class TransformSectionAdvice(BaseModel):
 
 
 class TransformStep(BaseModel):
-    kind: str                       # 'summary' | 'experience' | 'projects' | 'extracurricular' | 'education'
+    kind: str                       # 'summary' | 'experience' | 'projects' | 'extracurricular' | 'achievements' | 'certifications'
     entry_id: str = ""              # '' for the summary step
     section: str                    # owning section key ('personal' for summary)
     label: str
@@ -147,6 +147,8 @@ class TransformStep(BaseModel):
     recommend_change: bool = True
     recommend_drop: bool = False    # entry is irrelevant to the JD — offer to drop it (entries phase)
     reason: str = ""
+    selection_only: bool = False    # pick-or-drop only — the entry is NEVER rewritten (achievements, certifications)
+    rank: int = -1                  # relevance rank within its kind (-1 = unset; 0 = most relevant) — drives caps + trim suggestions
 
 
 class TransformPlanOut(BaseModel):
@@ -160,10 +162,11 @@ class TransformSectionIn(BaseModel):
     job_title: str = Field(default="", max_length=200)
     company: str = Field(default="", max_length=200)
     kind: str
-    entry: dict[str, Any] = Field(default_factory=dict)   # the single original unit (summary -> {"summary": "..."})
+    entry: dict[str, Any] = Field(default_factory=dict)   # single original unit; skills_section -> {"categories": [...]}
     current: dict[str, Any] = Field(default_factory=dict) # the CURRENT draft being refined (bullets/text/summary) — enables surgical edits
     sources: list[str] = Field(default_factory=list)      # README / notes text — grounds allowed facts & numbers
     instruction: str = Field(default="", max_length=2000) # optional user refine comment for a regeneration
+    confirmed_additions: list[str] = Field(default_factory=list)  # skill items the USER attested to knowing (provenance only)
 
 
 class TransformSectionOut(BaseModel):

@@ -17,6 +17,8 @@ Pure functions, no FastAPI imports — unit-testable in isolation.
 import re
 from typing import Any
 
+from .resume_rules import SUMMARY_MAX_CHARS, SUMMARY_MAX_LINES
+
 # Builtin list-section keys (personal is handled separately; custom sections
 # never reach the LLM — the client strips and re-attaches them).
 _LIST_SECTIONS = [
@@ -179,6 +181,69 @@ def _sources_numbers(sources: list[str] | None) -> set[str]:
         if isinstance(s, str):
             nums |= _numbers_in(s)
     return nums
+
+
+_YEARS_RE = re.compile(r"\b\d+(?:\.\d+)?\+?\s*(?:-\s*\d+(?:\.\d+)?\+?\s*)?years?\b", re.IGNORECASE)
+
+
+def title_claim_warning(new_text: str, old_text: str, job_title: str) -> str | None:
+    """Detect identity fabrication in a rewritten professional summary.
+
+    Returns a human-readable warning when the rewrite claims the TARGET role's
+    title or a years-of-experience figure the original summary didn't have.
+    The number-guard still runs separately; this catches the subtler
+    "Data Analyst with 1.5+ years…" pattern for a candidate whose real headline
+    is "AI/ML Engineer". Warning-only — it never blocks a rewrite.
+
+    Heuristics:
+    - The rewrite mentions the JD's title but the original summary did not
+      (seniority qualifiers like "senior" are stripped before matching).
+    - The rewrite states an "N years" tenure absent from the original summary.
+    """
+    new_l, old_l = (new_text or "").casefold(), (old_text or "").casefold()
+    jt = (job_title or "").strip().casefold()
+
+    def _contains_title(haystack: str) -> bool:
+        if not jt:
+            return False
+        if jt in haystack:
+            return True
+        stripped = re.sub(r"\b(senior|junior|lead|principal|staff)\s+", "", jt)
+        return bool(stripped) and stripped in haystack
+
+    if jt and _contains_title(new_l) and not _contains_title(old_l):
+        return (
+            "The rewrite mentions the target role's title. Keep your REAL "
+            "headline — highlight relevant work without claiming that role."
+        )
+
+    new_years = {m.group(0).casefold() for m in _YEARS_RE.finditer(new_text or "")}
+    old_years = {m.group(0).casefold() for m in _YEARS_RE.finditer(old_text or "")}
+    novel = new_years - old_years
+    if novel:
+        return (
+            f"The rewrite asserts experience length ({', '.join(sorted(novel))}) "
+            "that wasn't in your original summary — verify it is true."
+        )
+    return None
+
+
+def summary_length_warning(text: str) -> str | None:
+    """Nudge for over-long professional summaries (target: ≤3 rendered lines).
+
+    Warning-only by design — auto-truncating mid-sentence would degrade quality,
+    so the prompt is told to write tight and this flags any straggler for the
+    user to tighten themselves.
+    """
+    t = (text or "").strip()
+    if len(t) <= SUMMARY_MAX_CHARS:
+        return None
+    est_lines = max(SUMMARY_MAX_LINES, round(len(t) / 110))
+    return (
+        f"The summary runs ~{est_lines} lines ({len(t)} chars) — aim for 3 lines "
+        f"or fewer (≤{SUMMARY_MAX_CHARS} chars). Tighten the wording; keep the "
+        "headline and the strongest proof."
+    )
 
 
 def guard_unit(

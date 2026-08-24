@@ -19,15 +19,26 @@ export const JD_MAX_CHARS = 15000;
 
 /** A single résumé unit the wizard will walk the user through. */
 export interface TransformStep {
-  kind: 'summary' | 'experience' | 'projects' | 'extracurricular' | 'education';
-  entry_id: string;          // '' for the summary step
-  section: string;           // owning section key ('personal' for summary)
+  kind:
+    | 'summary'
+    | 'experience'
+    | 'projects'
+    | 'extracurricular'
+    | 'achievements'
+    | 'certifications'
+    | 'skills_section';   // virtual step: whole-skills curation (client-side only)
+  entry_id: string;          // '' for the summary / skills steps
+  section: string;           // owning section key ('personal' for summary, 'skills' for skills_section)
   label: string;
   asks_readme: boolean;      // project steps may request the project README (Phase 2)
   asks_related_work: boolean;// experience steps may request JD-related work notes (Phase 2)
   recommend_change: boolean;
-  recommend_drop: boolean;   // entry is irrelevant to the JD — offer to drop it (entries phase)
+  recommend_drop: boolean;   // entry is irrelevant to the JD — offer to drop it (content phase)
   reason: string;
+  /** Pick-or-drop only — this entry is NEVER rewritten (achievements, certifications). */
+  selection_only?: boolean;
+  /** Relevance rank within its kind (-1/undefined = unset; 0 = most relevant). */
+  rank?: number;
 }
 
 /** AI advice on whether to keep a whole section for this JD. */
@@ -111,6 +122,63 @@ export async function tailorSection(args: TailorSectionArgs): Promise<SectionPro
       entry: args.entry,
       current: args.current ?? {},
       sources: args.sources ?? [],
+      instruction: args.instruction ?? '',
+    }),
+  });
+}
+
+// ── Skills curation (whole-section, question-based) ─────────────────────────
+
+export interface SkillRemoval {
+  category: string;
+  item: string;
+  reason: string;
+}
+
+export interface SkillQuestion {
+  item: string;
+  why: string;
+  source: 'jd' | 'smart';
+}
+
+export interface SkillsProposalData {
+  remove: SkillRemoval[];
+  questions: SkillQuestion[];
+}
+
+/** Result of the whole-skills curation pass (removals pre-validated server-side). */
+export interface SkillsCuration {
+  proposal: SkillsProposalData;
+  rationale: string;
+  warnings: string[];
+  no_change_recommended: boolean;
+}
+
+export interface TailorSkillsArgs {
+  jobDescription: string;
+  jobTitle: string;
+  company: string;
+  /** The candidate's CURRENT skill categories (id + category + items). */
+  categories: { id?: string; category: string; items: string[] }[];
+  /** Optional steering comment for a regeneration. */
+  instruction?: string;
+}
+
+/**
+ * Curate ALL skill categories in one call. The server only ever returns
+ * validated REMOVALS and ADDITION QUESTIONS — the user must confirm every
+ * addition in the UI before it can reach the résumé.
+ */
+export async function tailorSkillsSection(args: TailorSkillsArgs): Promise<SkillsCuration> {
+  return api<SkillsCuration>('/tools/transform/section', {
+    method: 'POST',
+    body: JSON.stringify({
+      job_description: args.jobDescription,
+      job_title: args.jobTitle,
+      company: args.company,
+      kind: 'skills_section',
+      entry: { categories: args.categories },
+      sources: [],
       instruction: args.instruction ?? '',
     }),
   });

@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { ResumeData, SectionConfig } from '@/lib/types';
+import { consumePendingActive } from '@/lib/transformSession';
 import { useAuth } from '@/context/AuthContext';
 
 export interface ResumeRecord {
@@ -43,7 +44,11 @@ export function useResumes() {
         const data = await api<ResumeRecord[]>('/resumes');
         if (cancelled) return;
         setResumes(data);
-        setActiveResume(data.find(r => r.is_master) ?? data[0] ?? null);
+        // A freshly created Transform branch (or other flow) may request to be
+        // the one selected when the builder next loads.
+        const pendingId = consumePendingActive();
+        const preferred = pendingId ? data.find((r) => r.id === pendingId) : undefined;
+        setActiveResume(preferred ?? data.find(r => r.is_master) ?? data[0] ?? null);
       } catch (err) {
         if (!cancelled) console.error('fetchResumes:', err);
       } finally {

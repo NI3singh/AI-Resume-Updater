@@ -28,6 +28,14 @@ from pypdf import PdfReader
 from ..config import settings
 from ..deps import get_current_user
 from ..llm import LLMError, LLMNotConfigured, chat_json
+from ..resume_rules import (
+    COMPULSORY_SECTIONS,
+    KIND_CAPS,
+    PROJECTS_MIN,
+    RULES_FOR_PROMPT,
+    SKILL_QUESTIONS_MAX,
+    SKILL_REMOVALS_MAX,
+)
 from ..models import User
 from ..schemas import (
     CompileIn,
@@ -48,7 +56,13 @@ from ..schemas import (
     VerifyOut,
     VerifySummary,
 )
-from ..transform_guard import guard_unit, prepare_for_llm, resolve_bullet_ops
+from ..transform_guard import (
+    guard_unit,
+    prepare_for_llm,
+    resolve_bullet_ops,
+    summary_length_warning,
+    title_claim_warning,
+)
 
 router = APIRouter(prefix="/tools", tags=["tools"])
 
@@ -241,6 +255,62 @@ SECTION_REFINE_SYSTEM = (
     '(either "bullets" as ops, or "text"/"summary"), plus: "rationale" (one short '
     'sentence), "covered_keywords" [], "missing_keywords" [], '
     '"no_change_recommended" false.'
+)
+
+# Appended to the tailor/refine prompts for SUMMARY units only. Summaries are
+# where models most often fabricate identity ("Data Analyst with 5 years…"
+# for a candidate who never worked as one), so the constraint is explicit and
+# carries a canonical example matching the product's promise.
+SUMMARY_IDENTITY_RULES = (
+    "\n\nIDENTITY HONESTY RULES (critical for summaries):\n"
+    "- Preserve the candidate's REAL headline exactly as written in the unit "
+    "(their actual role/title). NEVER replace it with the JD's job title or "
+    "imply they are employed as that role.\n"
+    "- NEVER state years-of-experience, seniority, or domain tenure that the "
+    "unit does not itself contain.\n"
+    "- You MAY re-weight emphasis and name JD-relevant tools/domains ONLY where "
+    "SOURCES genuinely show them, and reorder sentences.\n"
+    "- LENGTH: at most 3 rendered lines — about 45–55 words, never more than 320 "
+    "characters. Tighten the wording rather than cutting the headline, the "
+    "tenure, or the strongest proof.\n"
+    "- The rewritten summary must remain literally true when read next to the "
+    "candidate's experience section.\n"
+    'Example correct reframe — original starts "AI/ML Engineer with 1.5+ years '
+    'of experience in developing LLM-powered applications…" for a Data Analyst JD:\n'
+    '  GOOD: "AI/ML Engineer with 1.5+ years of experience in data analytics, ETL '
+    'automation, and business intelligence using Python, SQL, Excel/Power BI…" '
+    "(same title, same tenure — emphasis drawn from real analytics work)\n"
+    '  BAD:  "Data Analyst with 1.5+ years of experience…" '
+    "(claims a title/tenure the candidate never had)\n"
+)
+
+# Skills curation: ONE call covering ALL skill categories. The model proposes
+# removals (exact-match validated) and addition QUESTIONS — the app asks the
+# candidate to confirm every addition before it can ever reach the résumé,
+# which keeps the no-fabrication guarantee intact while still allowing genuine
+# gaps to be filled.
+SKILLS_SECTION_SYSTEM = (
+    "You are a skill-section curator. You are given ALL skill categories of a "
+    "candidate's résumé (category name + exact items) and a target job "
+    "description (JD). Decide how the skills section should change for THIS "
+    "job. You never produce final item lists — the app asks the candidate to "
+    "confirm every addition before it is applied.\n\n"
+    "Return ONLY a JSON object (no markdown, no commentary):\n"
+    "{\n"
+    '  "remove": [ { "category": "<exact category name>", "item": "<exact item text>", "reason": "<= 10 words" } ],\n'
+    '  "questions": [ { "item": "Power BI", "why": "JD requires dashboarding and your listed analytics work implies it", "source": "jd" } ],\n'
+    '  "rationale": "one short sentence on the overall curation angle",\n'
+    '  "no_change_recommended": false\n'
+    "}\n"
+    "remove rules:\n"
+    "- 'category' and 'item' must match the input EXACTLY (copy verbatim). Propose removing only items that are irrelevant or counter-productive for THIS JD.\n"
+    "- Never remove an item the JD explicitly requires. Prefer trimming over emptying: keep at least two items in any category you touch unless the whole category is irrelevant.\n"
+    f"- At most {SKILL_REMOVALS_MAX} removals total — be surgical.\n"
+    "questions rules:\n"
+    "- Propose ADDING skills the candidate very likely knows but has not listed anywhere in the input — grounded in their listed domains/projects or explicit JD requirements.\n"
+    '- "source":"jd" when an explicit JD requirement is missing from the résumé; "source":"smart" for rare adjacent pairings with listed skills (use at most twice).\n'
+    f"- Hard cap: {SKILL_QUESTIONS_MAX} questions total. NEVER ask about an item already present (case-insensitive) anywhere in the input.\n"
+    "- Never invent implausible tools for the candidate's domains."
 )
 
 
@@ -455,8 +525,13 @@ def verify_resume(payload: VerifyIn, current_user: User = Depends(get_current_us
     return VerifyOut(data=data, warnings=warnings, summary=summary)
 
 
-# Units the interactive Transform can tailor (summary + the text-bearing sections).
-_TAILORABLE_KINDS = {"summary", "experience", "projects", "extracurricular", "education", "skills"}
+# Units the interactive Transform can tailor. "skills_section" is the whole
+# skills curation pass (removals + addition questions); "education" remains
+# accepted for backward compatibility but is no longer planned or rewritten.
+_TAILORABLE_KINDS = {
+    "summary", "experience", "projects", "extracurricular",
+    "achievements", "certifications", "education", "skills", "skills_section",
+}
 
 
 def _clean_keywords(value: object, limit: int = 20) -> list[str]:
@@ -473,34 +548,52 @@ def _clean_keywords(value: object, limit: int = 20) -> list[str]:
     return out
 
 
-# Plan enrichment: a small metadata-only LLM pass that flags which units are
-# worth tailoring for this JD (so the wizard can suggest "skip" for ones that
-# already fit) and reports the résumé's honest gaps. No rewritten text here, so
-# it's cheap and can't truncate.
+# Plan enrichment: a metadata-only LLM pass that curates the résumé for THIS
+# JD — which whole sections to keep, which entries survive (ranked, so caps and
+# page-budget trims have an ordering), which units are worth rewriting, and the
+# honest gaps. No rewritten text here, so it's cheap and can't truncate.
 PLAN_SYSTEM = (
-    "You are a resume tailoring planner. You are given a target job description "
-    "(JD), a list of resume UNITS (each with an index, kind, label, and a short "
-    "preview), and a list of whole SECTIONS present in the resume. Decide what to "
-    "tailor for THIS job.\n\n"
+    "You are a resume tailoring planner curating a candidate's master résumé "
+    "down to a targeted application. You are given a target job description "
+    "(JD), a list of resume UNITS (each with an index, kind, label, a short "
+    "preview, and whether it is selection-only), and a list of whole SECTIONS "
+    "present in the résumé. Decide what THIS résumé should keep and tailor.\n\n"
+    + RULES_FOR_PROMPT + "\n\n"
     "Return ONLY a JSON object (no markdown, no commentary):\n"
     "{\n"
-    '  "units": [ { "i": <index>, "recommend_change": true, "recommend_drop": false, "reason": "<= 12 words why" } ],\n'
+    '  "units": [ { "i": <index>, "recommend_change": true, "recommend_drop": false, "rank": 0, "reason": "<= 12 words why" } ],\n'
     '  "sections": [ { "section": "<section id>", "keep": true, "reason": "<= 12 words why" } ],\n'
     '  "missing_keywords": ["JD requirements the resume as a whole does not show"]\n'
     "}\n"
-    "For UNITS: recommend_change=false when a unit is already well aligned with "
-    "the JD, or is irrelevant to it, so the user can safely skip it. "
-    "recommend_drop=true ONLY for an experience / project / activity entry that "
-    "does NOT support this JD at all and the candidate should consider removing it "
-    "(e.g. a pure data-analytics project for an ML-engineer role); default false. "
-    "NEVER set recommend_drop on a summary or education unit. Be conservative — a "
-    "weakly-relevant entry is recommend_change=true, not a drop.\n"
-    "For SECTIONS: keep=false ONLY when a whole section clearly does not help this "
-    "application and the candidate should consider dropping it (e.g. publications "
-    "for a non-research role, extracurriculars for a senior role). Be conservative "
-    "— default to keep=true, and give a short reason whenever you advise a drop.\n"
-    "Keep reasons short and concrete. Be honest in missing_keywords and NEVER "
-    "suggest adding them to the resume."
+    "UNIT rules:\n"
+    "- rank = relevance of this entry to THIS JD: 0 is the single most relevant entry OF ITS KIND across the whole resume. Rank every entry you keep; drops may reuse any number.\n"
+    "- recommend_change=false when a unit already fits the JD well or is irrelevant, so the user can safely skip rewriting it. Only rewrite-capable kinds may get recommend_change=true.\n"
+    "- SELECTION-ONLY units (achievements, certifications) are never rewritten: always set recommend_change=false for them; your keep/drop vote is recommend_drop, and rank decides who survives the caps.\n"
+    "- recommend_drop=true ONLY for an entry that does not support THIS JD at all. Be conservative — weakly-relevant means recommend_change=true, not a drop. NEVER recommend_drop on a summary unit.\n"
+    "SECTION DECISION PROCEDURE — apply in order, deterministically. The SAME JD "
+    "must always produce the SAME verdicts; base every call only on the signals "
+    "below, never on guesswork.\n"
+    "1. Classify the opportunity from job_title + company + JD text:\n"
+    "   RESEARCH signal — the company is a research lab/institute (e.g. OpenAI, "
+    "DeepMind, Meta FAIR, Microsoft Research, Allen AI, national/university labs, "
+    "any '… Research' organisation), OR the title contains Research/Scientist, OR "
+    "the JD's core focus is research, papers, novel methods or publications.\n"
+    "   SERVICE signal — the company is an IT services/consulting firm (e.g. "
+    "Accenture, TCS, Infosys, Wipro, Cognizant, Capgemini, Deloitte, HCL, Tech "
+    "Mahindra, IBM Consulting) or the JD stresses client delivery, consulting or "
+    "staff augmentation.\n"
+    "   Otherwise: INDUSTRY (product/business) role.\n"
+    "2. publications — keep ONLY under a RESEARCH signal (or when the candidate's "
+    "publication topics directly match an explicitly research-flavoured JD). "
+    "Under a SERVICE or plain INDUSTRY signal, advise keep=false with a concrete "
+    "reason such as 'Service-based role — research papers won't move this screen'. "
+    "When genuinely torn between signals, DEFAULT to keep=false for non-research roles.\n"
+    "3. extracurricular — keep only when the entries add transferable signal for "
+    "THIS role (leadership, relevant communities, competitions). Advise keep=false "
+    "when the content is generic and the role is technical or senior.\n"
+    "4. NEVER advise dropping these sections: personal, education, skills, "
+    "projects, experience, achievements, certifications.\n"
+    "Keep reasons short and concrete. Be honest in missing_keywords and NEVER suggest adding them to the resume."
 )
 
 
@@ -510,6 +603,8 @@ def _unit_preview(kind: str, entry: dict, limit: int = 200) -> str:
         text = str(entry.get("summary") or "")
     elif kind == "education":
         text = str(entry.get("highlight") or "")
+    elif kind in ("achievements", "certifications"):
+        text = str(entry.get("text") or "")
     else:
         bullets = [str(b) for b in (entry.get("bullets") or []) if isinstance(b, (str, int, float))]
         text = " · ".join(bullets)
@@ -525,6 +620,49 @@ def _section_has_content(data: dict, section_id: str) -> bool:
         return False
     value = data.get(section_id)
     return isinstance(value, list) and len(value) > 0
+
+
+def _clamp_and_rank(steps: list[TransformStep]) -> None:
+    """Deterministically enforce the curation caps on the planner's verdicts.
+
+    The LLM tends to over-keep, so once its votes land we clamp every capped
+    kind (projects ≤3, certifications ≤8, …) to its rule cap: highest-ranked
+    keeps survive, the rest flip to ``recommend_drop`` with an explanatory
+    reason. Projects are topped back up to ``PROJECTS_MIN`` if the votes fell
+    below it while better-ranked candidates were dropped. Ranks are normalised
+    so UI trim lists have a stable order even when the model omits them.
+    """
+    by_kind: dict[str, list[int]] = {}
+    for idx, s in enumerate(steps):
+        by_kind.setdefault(s.kind, []).append(idx)
+
+    def _order_key(i: int) -> tuple[int, int]:
+        # rank == -1 means the planner didn't supply one — sort those after
+        # every explicitly ranked entry (original order breaks ties).
+        return (steps[i].rank if steps[i].rank >= 0 else 10_000 + i, i)
+
+    for kind, idxs in by_kind.items():
+        cap = KIND_CAPS.get(kind)
+        keeps = [i for i in idxs if not steps[i].recommend_drop]
+
+        # Normalise ranks: model-supplied first, otherwise original order.
+        order = sorted(keeps, key=_order_key)
+        for pos, i in enumerate(order):
+            if steps[i].rank < 0:
+                steps[i].rank = pos
+
+        # Cap enforcement — beyond-cap keeps become drops with a clear reason.
+        if cap is not None and len(order) > cap:
+            for i in order[cap:]:
+                steps[i].recommend_drop = True
+                steps[i].reason = f"Beyond top-{cap} by JD relevance"
+
+        # Projects floor — never tailor down to fewer than PROJECTS_MIN when
+        # better-ranked dropped candidates exist.
+        if kind == "projects" and len(order) < PROJECTS_MIN:
+            drops = sorted((i for i in idxs if steps[i].recommend_drop), key=_order_key)
+            for i in drops[: PROJECTS_MIN - len(order)]:
+                steps[i].recommend_drop = False
 
 
 def _enrich_plan(
@@ -554,7 +692,7 @@ def _enrich_plan(
         "RESUME SECTIONS (JSON):\n" + json.dumps(sections, ensure_ascii=False)
     )
     try:
-        result = chat_json(PLAN_SYSTEM, user_msg, max_tokens=2048)
+        result = chat_json(PLAN_SYSTEM, user_msg, max_tokens=4096)
     except (LLMError, LLMNotConfigured):
         return []  # planning is optional — the deterministic plan still works
 
@@ -569,9 +707,15 @@ def _enrich_plan(
                 continue
             if 0 <= idx < len(steps):
                 steps[idx].recommend_change = bool(u.get("recommend_change", True))
-                # Only entry kinds are droppable; never the summary/education.
-                if steps[idx].kind in ("experience", "projects", "extracurricular"):
+                # Entry kinds are droppable; never the summary. Selection-only
+                # kinds are additionally hard-pinned to no-rewrite.
+                if steps[idx].kind in ("experience", "projects", "extracurricular", "achievements", "certifications"):
                     steps[idx].recommend_drop = bool(u.get("recommend_drop", False))
+                    if steps[idx].selection_only:
+                        steps[idx].recommend_change = False
+                rank = u.get("rank")
+                if isinstance(rank, (int, float)) and rank >= 0:
+                    steps[idx].rank = int(rank)
                 reason = str(u.get("reason") or "").strip()
                 if reason:
                     steps[idx].reason = reason[:140]
@@ -589,6 +733,7 @@ def _enrich_plan(
                 if reason:
                     adv.reason = reason[:140]
 
+    _clamp_and_rank(steps)
     return _clean_keywords(result.get("missing_keywords"))
 
 
@@ -634,22 +779,30 @@ def transform_plan(
             ))
             previews.append(_unit_preview(section, e))
 
-    for e in prepared.get("education") or []:
-        if isinstance(e, dict) and str(e.get("highlight") or "").strip():
-            label = str(e.get("institution") or "").strip() or "Education"
+    # Selection-only curation units: achievements & certifications are
+    # pick-or-drop candidates ranked by JD relevance — never rewritten. The
+    # deterministic clamp then enforces their kept-count caps.
+    for section in ("achievements", "certifications"):
+        noun = "Achievement" if section == "achievements" else "Certification"
+        for e in prepared.get(section) or []:
+            if not isinstance(e, dict):
+                continue
+            label = (str(e.get("text") or "").strip() or noun)[:70]
             steps.append(TransformStep(
-                kind="education", entry_id=str(e.get("id") or ""), section="education", label=label,
+                kind=section, entry_id=str(e.get("id") or ""), section=section,
+                label=label, selection_only=True,
             ))
-            previews.append(_unit_preview("education", e))
+            previews.append(_unit_preview(section, e))
 
     # Whole-section drop advice — one entry per non-empty section in the user's
-    # section_config (the source of truth for what renders), labels and all.
+    # section_config (the source of truth for what renders). Compulsory sections
+    # (personal / education) are never offered for removal.
     section_advice: list[TransformSectionAdvice] = []
     for s in payload.section_config:
         if not isinstance(s, dict):
             continue
         sid = str(s.get("id") or "")
-        if sid and _section_has_content(payload.data, sid):
+        if sid and sid not in COMPULSORY_SECTIONS and _section_has_content(payload.data, sid):
             section_advice.append(TransformSectionAdvice(
                 section=sid, label=str(s.get("label") or sid.title()), keep=True, reason="",
             ))
@@ -659,6 +812,130 @@ def transform_plan(
         payload.job_title, payload.company,
     )
     return TransformPlanOut(steps=steps, section_advice=section_advice, missing_keywords=missing)
+
+
+def _tailor_skills_section(
+    payload: TransformSectionIn,
+    jd: str,
+    sources: list[str],
+    instruction: str,
+) -> TransformSectionOut:
+    """Curate ALL skill categories in one pass: validated removals + addition
+    questions. Nothing lands on the résumé here — additions only ever become
+    questions the candidate must confirm in the UI."""
+    cats_raw = payload.entry.get("categories")
+    if not isinstance(cats_raw, list):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No skill categories provided.",
+        )
+    clean_cats: list[dict] = []
+    for c in cats_raw:
+        if not isinstance(c, dict):
+            continue
+        name = str(c.get("category") or "").strip()
+        items = [
+            str(i).strip()
+            for i in (c.get("items") or [])
+            if isinstance(i, (str, int, float)) and str(i).strip()
+        ]
+        if name and items:
+            clean_cats.append({"category": name, "items": items})
+    if not clean_cats:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The skills section is empty — nothing to curate.",
+        )
+
+    header = (
+        f"JOB TITLE: {payload.job_title.strip() or '(not provided)'}\n"
+        f"COMPANY: {payload.company.strip() or '(not provided)'}\n"
+        "UNIT KIND: skills_section\n"
+    )
+    if instruction:
+        header += (
+            "\n*** USER CHANGE REQUEST (top priority — you MUST apply this "
+            f"within your remove/question proposals): {instruction}\n"
+        )
+    user_msg = (
+        header
+        + "\nJOB DESCRIPTION:\n" + jd
+        + "\n\nSKILL CATEGORIES (JSON):\n" + json.dumps(clean_cats, ensure_ascii=False)
+    )
+    if sources:
+        user_msg += (
+            "\n\nSOURCES the user provided (context only — never a licence to "
+            "invent tools they don't show):\n" + "\n\n---\n\n".join(sources)
+        )
+    if instruction:
+        user_msg += f"\n\nREMINDER — honour this request: {instruction}"
+
+    try:
+        result = chat_json(
+            SKILLS_SECTION_SYSTEM, user_msg, max_tokens=2048, temperature=0.4,
+        )
+    except LLMNotConfigured as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except LLMError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    # Validate removals: category+item must exist verbatim (case-insensitive).
+    lookup = {
+        c["category"].casefold(): {i.casefold(): i for i in c["items"]}
+        for c in clean_cats
+    }
+    known_items_cf = {i for s in lookup.values() for i in s}
+    removes: list[dict] = []
+    seen_rm: set[tuple[str, str]] = set()
+    raw_removes = result.get("remove")
+    for r in (raw_removes if isinstance(raw_removes, list) else [])[: SKILL_REMOVALS_MAX * 2]:
+        if not isinstance(r, dict):
+            continue
+        cat = str(r.get("category") or "").strip()
+        item = str(r.get("item") or "").strip()
+        key = (cat.casefold(), item.casefold())
+        if not item or key in seen_rm:
+            continue
+        canonical_item = lookup.get(cat.casefold(), {}).get(item.casefold())
+        if canonical_item is None:
+            continue  # not a real (category, item) pair — drop silently
+        seen_rm.add(key)
+        removes.append({
+            "category": cat,
+            "item": canonical_item,
+            "reason": str(r.get("reason") or "").strip()[:120],
+        })
+    removes = removes[:SKILL_REMOVALS_MAX]
+
+    # Questions: deduped, never about already-listed items, hard-capped.
+    questions: list[dict] = []
+    q_seen: set[str] = set()
+    raw_qs = result.get("questions")
+    for q in (raw_qs if isinstance(raw_qs, list) else []):
+        if len(questions) >= SKILL_QUESTIONS_MAX:
+            break
+        if not isinstance(q, dict):
+            continue
+        item = str(q.get("item") or "").strip()
+        icf = item.casefold()
+        if not item or icf in known_items_cf or icf in q_seen:
+            continue
+        src = str(q.get("source") or "jd").strip().lower()
+        q_seen.add(icf)
+        questions.append({
+            "item": item,
+            "why": str(q.get("why") or "").strip()[:160],
+            "source": src if src in ("jd", "smart") else "jd",
+        })
+
+    return TransformSectionOut(
+        proposal={"remove": removes, "questions": questions},
+        rationale=str(result.get("rationale") or "").strip(),
+        covered_keywords=[],
+        missing_keywords=[],
+        warnings=[],
+        no_change_recommended=bool(result.get("no_change_recommended")),
+    )
 
 
 @router.post("/transform/section", response_model=TransformSectionOut)
@@ -679,6 +956,10 @@ def transform_section(
         if isinstance(s, str) and s.strip()
     ]
     instruction = payload.instruction.strip()[: settings.parse_text_limit]
+
+    # Skills curation is its own flow (whole-section, question-based).
+    if payload.kind == "skills_section":
+        return _tailor_skills_section(payload, jd, sources, instruction)
 
     # ── Surgical refine ──────────────────────────────────────────────────────
     # When there's a change request AND a current draft, edit THAT draft (not the
@@ -724,8 +1005,11 @@ def transform_section(
                 + "\n\n---\n\n".join(sources)
             )
         rbody += f"\n\nREMINDER — apply ONLY this change, keep the rest verbatim: {instruction}"
+        refine_system = SECTION_REFINE_SYSTEM + (
+            SUMMARY_IDENTITY_RULES if payload.kind == "summary" else ""
+        )
         try:
-            result = chat_json(SECTION_REFINE_SYSTEM, rheader + rbody, max_tokens=4096, temperature=0.4)
+            result = chat_json(refine_system, rheader + rbody, max_tokens=4096, temperature=0.4)
         except LLMNotConfigured as exc:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
         except LLMError as exc:
@@ -752,6 +1036,15 @@ def transform_section(
                     "education", {"highlight": cur_text}, {"highlight": text_out}, sources=refine_sources,
                 )
                 guarded = {"text": g.get("highlight", cur_text)}
+        if payload.kind == "summary":
+            claim = title_claim_warning(
+                str(guarded.get("summary") or ""), cur_text, payload.job_title,
+            )
+            if claim:
+                warnings.append(claim)
+            length_note = summary_length_warning(str(guarded.get("summary") or ""))
+            if length_note:
+                warnings.append(length_note)
         return TransformSectionOut(
             proposal=guarded,
             rationale=str(result.get("rationale") or "").strip(),
@@ -791,15 +1084,30 @@ def transform_section(
 
     # A little randomness so a regeneration (especially with a change request)
     # yields a genuinely different, instruction-following result rather than the
-    # identical output a reasoning model returns at temperature 0.
+    # identical output a reasoning model returns at temperature 0. Summaries
+    # additionally carry the identity-honesty rules (no invented titles/tenure).
+    section_system = SECTION_SYSTEM + (
+        SUMMARY_IDENTITY_RULES if payload.kind == "summary" else ""
+    )
     try:
-        result = chat_json(SECTION_SYSTEM, user_msg, max_tokens=4096, temperature=0.6)
+        result = chat_json(section_system, user_msg, max_tokens=4096, temperature=0.6)
     except LLMNotConfigured as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except LLMError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     guarded, warnings = guard_unit(payload.kind, payload.entry, result, sources=sources)
+    if payload.kind == "summary":
+        claim = title_claim_warning(
+            str(guarded.get("summary") or ""),
+            str((payload.entry or {}).get("summary") or ""),
+            payload.job_title,
+        )
+        if claim:
+            warnings.append(claim)
+        length_note = summary_length_warning(str(guarded.get("summary") or ""))
+        if length_note:
+            warnings.append(length_note)
     return TransformSectionOut(
         proposal=guarded,
         rationale=str(result.get("rationale") or "").strip(),
@@ -945,8 +1253,18 @@ def compile_pdf(payload: CompileIn, current_user: User = Depends(get_current_use
             detail="LaTeX compilation failed. Check your LaTeX code for errors.",
         )
 
+    # Page count comes back as a header so the Transform studio can show the
+    # real page budget without parsing the PDF in the browser. Best-effort.
+    headers = {"Content-Disposition": 'attachment; filename="resume.pdf"'}
+    try:
+        pages = len(PdfReader(io.BytesIO(pdf)).pages)
+        if pages:
+            headers["X-Pdf-Pages"] = str(pages)
+    except Exception:  # noqa: BLE001 — header is advisory only
+        pass
+
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="resume.pdf"'},
+        headers=headers,
     )
